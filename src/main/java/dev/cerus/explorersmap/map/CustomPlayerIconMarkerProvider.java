@@ -1,0 +1,68 @@
+package dev.cerus.explorersmap.map;
+
+import com.hypixel.hytale.math.vector.Transform;
+import com.hypixel.hytale.math.vector.Vector3d;
+import com.hypixel.hytale.protocol.packets.worldmap.MapMarker;
+import com.hypixel.hytale.server.core.asset.type.gameplay.GameplayConfig;
+import com.hypixel.hytale.server.core.asset.type.gameplay.WorldMapConfig;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
+import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
+import com.hypixel.hytale.server.core.universe.world.worldmap.markers.PlayerIconMarkerProvider;
+import com.hypixel.hytale.server.core.util.PositionUtil;
+import dev.cerus.explorersmap.ExplorersMapPlugin;
+import java.util.function.Predicate;
+import javax.annotation.Nonnull;
+
+/**
+ * A marker provider implementation that sends player markers with unlimited range
+ */
+public class CustomPlayerIconMarkerProvider implements WorldMapManager.MarkerProvider {
+
+    public static final WorldMapManager.MarkerProvider INSTANCE = new CustomPlayerIconMarkerProvider();
+
+    @Override
+    public void update(@Nonnull World world, @Nonnull GameplayConfig gameplayConfig, @Nonnull WorldMapTracker tracker, int chunkViewRadius, int playerChunkX, int playerChunkZ) {
+        if (!ExplorersMapPlugin.getInstance().getConfig().get().isUnlimitedPlayerTracking()) {
+            PlayerIconMarkerProvider.INSTANCE.update(world, gameplayConfig, tracker, chunkViewRadius, playerChunkX, playerChunkZ);
+            return;
+        }
+
+        WorldMapConfig worldMapConfig = gameplayConfig.getWorldMapConfig();
+        if (!worldMapConfig.isDisplayPlayers()) {
+            return;
+        }
+        if (!tracker.shouldUpdatePlayerMarkers()) {
+            return;
+        }
+
+        Player player = tracker.getPlayer();
+        Predicate<PlayerRef> playerMapFilter = tracker.getPlayerMapFilter();
+
+        for (PlayerRef otherPlayer : world.getPlayerRefs()) {
+            if (otherPlayer.getUuid().equals(player.getUuid())) {
+                continue;
+            }
+            if (playerMapFilter != null && !playerMapFilter.test(otherPlayer)) {
+                continue;
+            }
+
+            Transform otherPlayerTransform = otherPlayer.getTransform();
+            Vector3d otherPos = otherPlayerTransform.getPosition();
+
+            if (tracker instanceof CustomWorldMapTracker customTracker) {
+                int otherChunkX = (int)otherPos.x >> 5;
+                int otherChunkZ = (int)otherPos.z >> 5;
+                if (!customTracker.isLoaded(otherChunkX, otherChunkZ)) {
+                    continue;
+                }
+            }
+
+            tracker.trySendMarker(chunkViewRadius, playerChunkX, playerChunkZ, otherPos, otherPlayer.getHeadRotation().getYaw(), "Player-" + otherPlayer.getUuid(), "Player: " + otherPlayer.getUsername(), otherPlayer, (id, name, op) -> {
+                return new MapMarker(id, name, "Player.png", PositionUtil.toTransformPacket(op.getTransform()), null);
+            });
+        }
+    }
+}
