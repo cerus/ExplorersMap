@@ -34,7 +34,7 @@ public class WorldMapDiskCache {
     public CompletableFuture<Void> saveImageToDiskAsync(World world, int chunkX, int chunkZ, float scale, MapImage mapImage) {
         return CompletableFuture.runAsync(() -> {
             try {
-                saveImageToDisk(world.getName(), chunkX, chunkZ, scale, mapImage);
+                saveImageToDisk(CustomWorldMapTracker.sanitizeWorldName(world), chunkX, chunkZ, scale, mapImage);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -68,7 +68,8 @@ public class WorldMapDiskCache {
     }
 
     public CompletableFuture<MapImage> readStoredImageAsync(World world, int chunkX, int chunkZ, float scale) {
-        Long2ObjectMap<CompletableFuture<MapImage>> cache = loadingImages.computeIfAbsent(world.getName(), o -> new Long2ObjectOpenHashMap<>());
+        String worldName = CustomWorldMapTracker.sanitizeWorldName(world);
+        Long2ObjectMap<CompletableFuture<MapImage>> cache = loadingImages.computeIfAbsent(worldName, o -> new Long2ObjectOpenHashMap<>());
         long index = ChunkUtil.indexChunk(chunkX, chunkZ);
         CompletableFuture<MapImage> future = cache.get(index);
         if (future != null) {
@@ -78,13 +79,13 @@ public class WorldMapDiskCache {
             return future;
         }
 
-        if (!Files.exists(getImagePath(world.getName(), chunkX, chunkZ, scale))) {
+        if (!Files.exists(getImagePath(worldName, chunkX, chunkZ, scale))) {
             return CompletableFuture.completedFuture(null);
         }
 
         future = CompletableFuture.supplyAsync(() -> {
             try {
-                return readStoredImage(world.getName(), chunkX, chunkZ, scale);
+                return readStoredImage(worldName, chunkX, chunkZ, scale);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -109,7 +110,7 @@ public class WorldMapDiskCache {
         for (int x = 0; x < img.getWidth(); x++) {
             for (int y = 0; y < img.getHeight(); y++) {
                 int rgb = img.getRGB(x, y);
-                mapImage.data[x * mapImage.width + y] = (((rgb >> 16) & 0xFF) & 255) << 24 | (((rgb >> 8) & 0xFF) & 255) << 16 | ((rgb & 0xFF) & 255) << 8 | 255;
+                mapImage.data[x * mapImage.width + y] = (((rgb >> 16) & 0xFF) & 255) << 24 | (((rgb >> 8) & 0xFF) & 255) << 16 | ((rgb & 0xFF) & 255) << 8 | (((rgb >> 24) & 0xFF) & 255);
             }
         }
         return mapImage;

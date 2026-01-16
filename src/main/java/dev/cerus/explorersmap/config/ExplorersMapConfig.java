@@ -22,6 +22,9 @@ public class ExplorersMapConfig {
             .append(new KeyedCodec<>("MinZoom", Codec.FLOAT),
                     ExplorersMapConfig::setMinZoom,
                     ExplorersMapConfig::getMinZoom).add()
+            .append(new KeyedCodec<>("SaveInstanceTiles", Codec.BOOLEAN),
+                    ExplorersMapConfig::setSaveInstanceTiles,
+                    ExplorersMapConfig::isSaveInstanceTiles).add()
             // This does not work right now
             /*.append(new KeyedCodec<>("UnlimitedPlayerTracking", Codec.BOOLEAN),
                     ExplorersMapConfig::setUnlimitedPlayerTracking,
@@ -34,6 +37,7 @@ public class ExplorersMapConfig {
     private int generationRate = 20;
     private boolean unlimitedPlayerTracking = true;
     private float minZoom = 8;
+    private boolean saveInstanceTiles = false;
 
     public void setExplorationRadius(int explorationRadius) {
         this.explorationRadius = explorationRadius;
@@ -81,5 +85,13 @@ public class ExplorersMapConfig {
 
     public float getMinZoom() {
         return minZoom;
+    }
+
+    public void setSaveInstanceTiles(boolean saveInstanceTiles) {
+        this.saveInstanceTiles = saveInstanceTiles;
+    }
+
+    public boolean isSaveInstanceTiles() {
+        return saveInstanceTiles;
     }
 }

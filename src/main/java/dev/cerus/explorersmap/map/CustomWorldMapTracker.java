@@ -1,5 +1,7 @@
 package dev.cerus.explorersmap.map;
 
+import com.hypixel.hytale.builtin.instances.InstancesPlugin;
+import com.hypixel.hytale.builtin.instances.config.InstanceWorldConfig;
 import com.hypixel.hytale.common.fastutil.HLongOpenHashSet;
 import com.hypixel.hytale.common.fastutil.HLongSet;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -33,6 +35,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
+import java.util.regex.Pattern;
 import javax.annotation.Nonnull;
 
 /**
@@ -41,6 +44,8 @@ import javax.annotation.Nonnull;
 public class CustomWorldMapTracker extends WorldMapTracker {
 
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
+    private static final Pattern INSTANCE_SUFFIX_PATTERN = Pattern.compile("-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+
     private static Method POI_UPDATE_METHOD;
     private static Field TRANSFORM_COMPONENT_FIELD;
 
@@ -116,11 +121,11 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
         // Load already explored tiles to send to the player
         if (loadFromDisk == null) {
-            explorationData = ExplorationStorage.get(world.getName(), getPlayer().getUuid());
+            explorationData = ExplorationStorage.get(sanitizeWorldName(world), getPlayer().getUuid());
             if (explorationData != null) {
                 ExplorationData dataToUse = ExplorersMapPlugin.getInstance().getConfig().get().isPerPlayerMap()
                         ? explorationData   // use the players own storage
-                        : ExplorationStorage.get(world.getName(), ExplorationStorage.UUID_GLOBAL); // use the global storage
+                        : ExplorationStorage.get(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL); // use the global storage
                 loadFromDisk = dataToUse.copyRegionsForSending(playerChunkX, playerChunkZ);
             }
         }
@@ -148,10 +153,12 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
         if (!toSend.isEmpty()) {
             // Mark loaded area as explored
-            toSend.forEach(chunk -> {
-                explorationData.markExplored(chunk);
-                ExplorationStorage.get(world.getName(), ExplorationStorage.UUID_GLOBAL).markExplored(chunk);
-            });
+            if (shouldPersist(world)) {
+                toSend.forEach(chunk -> {
+                    explorationData.markExplored(chunk);
+                    ExplorationStorage.get(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL).markExplored(chunk);
+                });
+            }
 
             // Broadcast to other players
             if (!ExplorersMapPlugin.getInstance().getConfig().get().isPerPlayerMap()) {
@@ -195,7 +202,10 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
                         MapImage mapImage = future.getNow(null);
                         out.add(new MapChunk(mapChunkX, mapChunkZ, mapImage));
-                        ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), mapImage);
+
+                        if (shouldPersist(world)) {
+                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), mapImage);
+                        }
                     }
                 }
             }
@@ -263,7 +273,10 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
                         MapImage mapImage = future.getNow(null);
                         out.add(new MapChunk(mapChunkX, mapChunkZ, mapImage));
-                        ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), mapImage);
+
+                        if (shouldPersist(world)) {
+                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), mapImage);
+                        }
                     }
                 } else {
                     iterator.remove();
@@ -299,7 +312,31 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         getPlayer().getPlayerConnection().write((Packet) packet);
     }
 
+    public void reset() {
+        loadedLock.writeLock().lock();
+        try {
+            transformComponent = null;
+            explorationData = null;
+            loaded.clear();
+            loadFromDisk = null;
+        } finally {
+            loadedLock.writeLock().unlock();
+        }
+    }
+
+    private boolean shouldPersist(World world) {
+        return !world.getName().startsWith("instance-") || ExplorersMapPlugin.getInstance().getConfig().get().isSaveInstanceTiles();
+    }
+
     public boolean isLoaded(int chunkX, int chunkZ) {
         return loaded.contains(ChunkUtil.indexChunk(chunkX, chunkZ));
+    }
+
+    public static String sanitizeWorldName(World world) {
+        String name = world.getName();
+        if (name.startsWith("instance-")) {
+            return INSTANCE_SUFFIX_PATTERN.matcher(name).replaceFirst("");
+        }
+        return name;
     }
 }

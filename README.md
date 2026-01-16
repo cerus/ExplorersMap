@@ -27,7 +27,10 @@ The mod comes with the following configuration file:
   // The rate at which the chunks around the player are mapped into tiles. This value is per tick. Vanilla value is 20.
   "GenerationRate": 20,
   // Sets how far you can zoom out. Min value is 2.
-  "MinZoom": 8.0
+  "MinZoom": 8.0,
+  // When set to true, tiles from instances (temporary worlds) will be saved to disk.
+  // Each instance type gets a dedicated folder.
+  "SaveInstanceTiles": false
 }
 ```
 

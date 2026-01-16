@@ -78,9 +78,13 @@ public class ExplorersMapPlugin extends JavaPlugin {
         }
 
         // Load exploration data
-        ExplorationStorage.load(world.getName(), player.getUuid());
+        ExplorationStorage.load(CustomWorldMapTracker.sanitizeWorldName(world), player.getUuid());
 
         if (player.getWorldMapTracker().getClass() != WorldMapTracker.class) {
+            if (player.getWorldMapTracker() instanceof CustomWorldMapTracker custom) {
+                custom.reset();
+                return;
+            }
             // Another mod has injected their stuff, abort
             LOGGER.atWarning().log("Failed to inject custom tracker due to mod incompatibility!");
             return;
@@ -102,14 +106,14 @@ public class ExplorersMapPlugin extends JavaPlugin {
     }
 
     private void onWorldAdd(AddWorldEvent event) {
-        ExplorationStorage.load(event.getWorld().getName(), ExplorationStorage.UUID_GLOBAL);
+        ExplorationStorage.load(CustomWorldMapTracker.sanitizeWorldName(event.getWorld()), ExplorationStorage.UUID_GLOBAL);
 
         // This does not work - the client only seems to render markers that are inside the view distance.
         //event.getWorld().getWorldMapManager().addMarkerProvider("playerIcons", CustomPlayerIconMarkerProvider.INSTANCE);
     }
 
     private void onWorldRemove(RemoveWorldEvent event) {
-        ExplorationStorage.unload(event.getWorld().getName(), ExplorationStorage.UUID_GLOBAL);
+        ExplorationStorage.unload(CustomWorldMapTracker.sanitizeWorldName(event.getWorld()), ExplorationStorage.UUID_GLOBAL);
     }
 
     public Config<ExplorersMapConfig> getConfig() {
