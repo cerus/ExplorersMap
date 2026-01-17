@@ -36,7 +36,7 @@ The mod comes with the following configuration file:
   // - GOOD: 32x32 tiles. Still very detailed. Might crash the game on well explored maps.
   // - FAST: 16x16 tiles. Default. Looks good enough.
   // - FASTER: 8x8 tiles. Starting to lose a lot of detail.
-  // - FASTEST: 8x8 tiles. Almost no detail left. Only use if all other resolutions crash the game.
+  // - FASTEST: 4x4 tiles. Almost no detail left. Only use if all other resolutions crash the game.
   "Resolution": "FAST"
 }
 ```
