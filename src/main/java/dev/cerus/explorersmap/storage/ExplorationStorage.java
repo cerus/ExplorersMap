@@ -12,6 +12,16 @@ public class ExplorationStorage {
 
     private static final Map<String, WorldData> worldDataMap = new HashMap<>();
 
+    public static ExplorationData getOrLoad(String world, UUID uuid) {
+        WorldData worldData = worldDataMap.computeIfAbsent(world, o -> new WorldData(world));
+        ExplorationData explorationData = worldData.get(uuid);
+        if (explorationData == null) {
+            worldData.load(uuid);
+            explorationData = worldData.get(uuid);
+        }
+        return explorationData;
+    }
+
     public static ExplorationData get(String world, UUID uuid) {
         WorldData worldData = worldDataMap.get(world);
         return worldData != null ? worldData.get(uuid) : null;

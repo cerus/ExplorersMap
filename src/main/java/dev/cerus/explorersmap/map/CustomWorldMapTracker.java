@@ -1,9 +1,8 @@
 package dev.cerus.explorersmap.map;
 
-import com.hypixel.hytale.builtin.instances.InstancesPlugin;
-import com.hypixel.hytale.builtin.instances.config.InstanceWorldConfig;
 import com.hypixel.hytale.common.fastutil.HLongOpenHashSet;
 import com.hypixel.hytale.common.fastutil.HLongSet;
+import com.hypixel.hytale.component.IResourceStorage;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.iterator.CircleSpiralIterator;
 import com.hypixel.hytale.math.util.ChunkUtil;
@@ -30,6 +29,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -121,11 +121,11 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
         // Load already explored tiles to send to the player
         if (loadFromDisk == null) {
-            explorationData = ExplorationStorage.get(sanitizeWorldName(world), getPlayer().getUuid());
+            explorationData = ExplorationStorage.getOrLoad(sanitizeWorldName(world), getPlayer().getUuid());
             if (explorationData != null) {
                 ExplorationData dataToUse = ExplorersMapPlugin.getInstance().getConfig().get().isPerPlayerMap()
                         ? explorationData   // use the players own storage
-                        : ExplorationStorage.get(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL); // use the global storage
+                        : ExplorationStorage.getOrLoad(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL); // use the global storage
                 loadFromDisk = dataToUse.copyRegionsForSending(playerChunkX, playerChunkZ);
             }
         }
@@ -156,7 +156,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             if (shouldPersist(world)) {
                 toSend.forEach(chunk -> {
                     explorationData.markExplored(chunk);
-                    ExplorationStorage.get(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL).markExplored(chunk);
+                    ExplorationStorage.getOrLoad(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL).markExplored(chunk);
                 });
             }
 
@@ -201,11 +201,14 @@ public class CustomWorldMapTracker extends WorldMapTracker {
                         int mapChunkZ = ChunkUtil.zOfChunkIndex(chunkCoordinates);
 
                         MapImage mapImage = future.getNow(null);
-                        out.add(new MapChunk(mapChunkX, mapChunkZ, mapImage));
 
+                        Resolution resolution = ExplorersMapPlugin.getInstance().getConfig().get().getResolution();
                         if (shouldPersist(world)) {
-                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), mapImage);
+                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), resolution, mapImage);
                         }
+
+                        mapImage = resolution.rescale(mapImage);
+                        out.add(new MapChunk(mapChunkX, mapChunkZ, mapImage));
                     }
                 }
             }
@@ -228,7 +231,8 @@ public class CustomWorldMapTracker extends WorldMapTracker {
                     int mapChunkZ = ChunkUtil.zOfChunkIndex(chunkCoordinates);
 
                     if (!this.loaded.contains(chunkCoordinates)) {
-                        CompletableFuture<MapImage> future = ExplorersMapPlugin.getInstance().getWorldMapDiskCache().readStoredImageAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale());
+                        Resolution resolution = ExplorersMapPlugin.getInstance().getConfig().get().getResolution();
+                        CompletableFuture<MapImage> future = ExplorersMapPlugin.getInstance().getWorldMapDiskCache().readStoredImageAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), resolution);
                         if (!future.isDone()) {
                             --maxGeneration;
                         } else if (loaded.add(chunkCoordinates)) {
@@ -272,11 +276,14 @@ public class CustomWorldMapTracker extends WorldMapTracker {
                         int mapChunkZ = ChunkUtil.zOfChunkIndex(chunkCoordinates);
 
                         MapImage mapImage = future.getNow(null);
-                        out.add(new MapChunk(mapChunkX, mapChunkZ, mapImage));
 
+                        Resolution resolution = ExplorersMapPlugin.getInstance().getConfig().get().getResolution();
                         if (shouldPersist(world)) {
-                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), mapImage);
+                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), resolution, mapImage);
                         }
+
+                        mapImage = resolution.rescale(mapImage);
+                        out.add(new MapChunk(mapChunkX, mapChunkZ, mapImage));
                     }
                 } else {
                     iterator.remove();

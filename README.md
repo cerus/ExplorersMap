@@ -30,7 +30,14 @@ The mod comes with the following configuration file:
   "MinZoom": 8.0,
   // When set to true, tiles from instances (temporary worlds) will be saved to disk.
   // Each instance type gets a dedicated folder.
-  "SaveInstanceTiles": false
+  "SaveInstanceTiles": false,
+  // The tile resolution. Available resolutions:
+  // - BEST: 96x96 tiles. Vanilla. Will crash the game on very well explored maps.
+  // - GOOD: 32x32 tiles. Still very detailed. Might crash the game on well explored maps.
+  // - FAST: 16x16 tiles. Default. Looks good enough.
+  // - FASTER: 8x8 tiles. Starting to lose a lot of detail.
+  // - FASTEST: 8x8 tiles. Almost no detail left. Only use if all other resolutions crash the game.
+  "Resolution": "FAST"
 }
 ```
 

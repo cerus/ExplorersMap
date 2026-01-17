@@ -31,10 +31,13 @@ public class WorldMapDiskCache {
         this.folder = folder;
     }
 
-    public CompletableFuture<Void> saveImageToDiskAsync(World world, int chunkX, int chunkZ, float scale, MapImage mapImage) {
+    public CompletableFuture<Void> saveImageToDiskAsync(World world, int chunkX, int chunkZ, float scale, @Nullable Resolution resolution, MapImage mapImage) {
         return CompletableFuture.runAsync(() -> {
             try {
                 saveImageToDisk(CustomWorldMapTracker.sanitizeWorldName(world), chunkX, chunkZ, scale, mapImage);
+                if (resolution != null && resolution.getScale() != scale) {
+                    saveImageToDisk(CustomWorldMapTracker.sanitizeWorldName(world), chunkX, chunkZ, resolution.getScale(), resolution.rescale(mapImage));
+                }
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -67,8 +70,9 @@ public class WorldMapDiskCache {
         }
     }
 
-    public CompletableFuture<MapImage> readStoredImageAsync(World world, int chunkX, int chunkZ, float scale) {
+    public CompletableFuture<MapImage> readStoredImageAsync(World world, int chunkX, int chunkZ, float scale, Resolution resolution) {
         String worldName = CustomWorldMapTracker.sanitizeWorldName(world);
+
         Long2ObjectMap<CompletableFuture<MapImage>> cache = loadingImages.computeIfAbsent(worldName, o -> new Long2ObjectOpenHashMap<>());
         long index = ChunkUtil.indexChunk(chunkX, chunkZ);
         CompletableFuture<MapImage> future = cache.get(index);
@@ -79,8 +83,36 @@ public class WorldMapDiskCache {
             return future;
         }
 
+        if (Files.exists(getImagePath(worldName, chunkX, chunkZ, resolution.getScale()))) {
+            future = readStoredImageAsync(world, chunkX, chunkZ, resolution.getScale());
+        } else if (Files.exists(getImagePath(worldName, chunkX, chunkZ, scale))) {
+            future = readStoredImageAsync(world, chunkX, chunkZ, scale).thenApply(mapImage -> {
+                MapImage rescaled = resolution.rescale(mapImage);
+                saveImageToDiskAsync(world, chunkX, chunkZ, resolution.getScale(), null, rescaled);
+                return rescaled;
+            });
+        } else {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        cache.put(index, future);
+        return future;
+    }
+
+    public CompletableFuture<MapImage> readStoredImageAsync(World world, int chunkX, int chunkZ, float scale) {
+        String worldName = CustomWorldMapTracker.sanitizeWorldName(world);
         if (!Files.exists(getImagePath(worldName, chunkX, chunkZ, scale))) {
             return CompletableFuture.completedFuture(null);
+        }
+
+        Long2ObjectMap<CompletableFuture<MapImage>> cache = loadingImages.computeIfAbsent(worldName, o -> new Long2ObjectOpenHashMap<>());
+        long index = ChunkUtil.indexChunk(chunkX, chunkZ);
+        CompletableFuture<MapImage> future = cache.get(index);
+        if (future != null) {
+            if (future.isDone()) {
+                cache.remove(index);
+            }
+            return future;
         }
 
         future = CompletableFuture.supplyAsync(() -> {

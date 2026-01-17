@@ -3,6 +3,7 @@ package dev.cerus.explorersmap.config;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
+import dev.cerus.explorersmap.map.Resolution;
 
 public class ExplorersMapConfig {
 
@@ -25,6 +26,9 @@ public class ExplorersMapConfig {
             .append(new KeyedCodec<>("SaveInstanceTiles", Codec.BOOLEAN),
                     ExplorersMapConfig::setSaveInstanceTiles,
                     ExplorersMapConfig::isSaveInstanceTiles).add()
+            .append(new KeyedCodec<>("Resolution", Codec.STRING),
+                    ExplorersMapConfig::setResolutionType,
+                    ExplorersMapConfig::getResolutionType).add()
             // This does not work right now
             /*.append(new KeyedCodec<>("UnlimitedPlayerTracking", Codec.BOOLEAN),
                     ExplorersMapConfig::setUnlimitedPlayerTracking,
@@ -38,6 +42,7 @@ public class ExplorersMapConfig {
     private boolean unlimitedPlayerTracking = true;
     private float minZoom = 8;
     private boolean saveInstanceTiles = false;
+    private Resolution resolution = Resolution.FAST;
 
     public void setExplorationRadius(int explorationRadius) {
         this.explorationRadius = explorationRadius;
@@ -93,5 +98,27 @@ public class ExplorersMapConfig {
 
     public boolean isSaveInstanceTiles() {
         return saveInstanceTiles;
+    }
+
+    public void setResolutionType(String str) {
+        setResolution(switch (str.toUpperCase()) {
+            case "BEST" -> Resolution.BEST;
+            case "GOOD" -> Resolution.GOOD;
+            case "FASTER" -> Resolution.FASTER;
+            case "FASTEST" -> Resolution.FASTEST;
+            default -> Resolution.FAST;
+        });
+    }
+
+    public String getResolutionType() {
+        return resolution.getType();
+    }
+
+    public Resolution getResolution() {
+        return resolution;
+    }
+
+    public void setResolution(Resolution resolution) {
+        this.resolution = resolution;
     }
 }

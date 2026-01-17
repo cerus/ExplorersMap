@@ -14,6 +14,7 @@ import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 import com.hypixel.hytale.server.core.universe.world.events.AddWorldEvent;
 import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapSettings;
 import com.hypixel.hytale.server.core.util.Config;
 import com.hypixel.hytale.unsafe.UnsafeUtil;
 import dev.cerus.explorersmap.config.ExplorersMapConfig;
@@ -70,7 +71,8 @@ public class ExplorersMapPlugin extends JavaPlugin {
         World world = event.getWorld();
 
         // Allow more zoom
-        UpdateWorldMapSettings settingsPacket = world.getWorldMapManager().getWorldMapSettings().getSettingsPacket();
+        WorldMapSettings worldMapSettings = world.getWorldMapManager().getWorldMapSettings();
+        UpdateWorldMapSettings settingsPacket = worldMapSettings.getSettingsPacket();
         float minZoom = config.get().getMinZoom();
         if (settingsPacket.minScale > minZoom && minZoom < settingsPacket.maxScale) {
             settingsPacket.minScale = Math.max(2, minZoom);
