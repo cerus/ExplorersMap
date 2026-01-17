@@ -31,6 +31,10 @@ public class WorldMapDiskCache {
         this.folder = folder;
     }
 
+    public void clearCache(World world) {
+        this.loadingImages.remove(CustomWorldMapTracker.sanitizeWorldName(world));
+    }
+
     public CompletableFuture<Void> saveImageToDiskAsync(World world, int chunkX, int chunkZ, float scale, @Nullable Resolution resolution, MapImage mapImage) {
         return CompletableFuture.runAsync(() -> {
             try {

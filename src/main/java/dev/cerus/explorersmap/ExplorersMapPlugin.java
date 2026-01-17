@@ -17,6 +17,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapSettings;
 import com.hypixel.hytale.server.core.util.Config;
 import com.hypixel.hytale.unsafe.UnsafeUtil;
+import dev.cerus.explorersmap.command.ExplorersMapCommand;
 import dev.cerus.explorersmap.config.ExplorersMapConfig;
 import dev.cerus.explorersmap.map.CustomWorldMapTracker;
 import dev.cerus.explorersmap.map.WorldMapDiskCache;
@@ -54,6 +55,8 @@ public class ExplorersMapPlugin extends JavaPlugin {
         getEventRegistry().registerGlobal(AddWorldEvent.class, this::onWorldAdd);
         getEventRegistry().registerGlobal(RemoveWorldEvent.class, this::onWorldRemove);
         getEventRegistry().registerGlobal(ShutdownEvent.class, this::onShutdown);
+
+        getCommandRegistry().registerCommand(new ExplorersMapCommand("explorersmap", "Open Explorers Map settings"));
     }
 
     private void onShutdown(ShutdownEvent event) {

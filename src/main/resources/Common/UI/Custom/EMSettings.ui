@@ -1,0 +1,119 @@
+$Common = "Common.ui";
+
+$Common.@PageOverlay {
+  LayoutMode: Middle;
+
+  $Common.@DecoratedContainer {
+    Anchor: (Width: 532);
+
+    #Title {
+      $Common.@Title {
+        @Text = "Explorers Map Settings";
+      }
+    }
+
+    #Content {
+      Label #ResDropdownLabel {
+        Style: (FontSize: 20, Alignment: Center);
+        Anchor: (Top: 5);
+        Text: "Resolution";
+      }
+      $Common.@DropdownBox #ResDropdown {
+        Anchor: (Top: 1, Width: 200, Height: 50);
+        Padding: (Full: 5);
+        TooltipText: "The resolution.";
+      }
+
+      Label #ExplRadLabel {
+        Style: (FontSize: 20, Alignment: Center);
+        Anchor: (Top: 10);
+        Text: "Exploration Radius";
+      }
+      $Common.@NumberField #ExplorationRadiusInput {
+        @Anchor = (Width: 60, Top: 1);
+
+        Format: (
+          MaxDecimalPlaces: 1,
+          Step: 1,
+          MinValue: 1,
+          MaxValue: 100
+        );
+      }
+
+      Label #DiskRateLabel {
+        Style: (FontSize: 20, Alignment: Center);
+        Anchor: (Top: 10);
+        Text: "Disk Load Rate";
+      }
+      $Common.@NumberField #DiskLoadRateInput {
+        @Anchor = (Width: 60, Top: 1);
+
+        Format: (
+          MaxDecimalPlaces: 1,
+          Step: 1,
+          MinValue: 1,
+          MaxValue: 256
+        );
+      }
+
+      Label #GenRateLabel {
+        Style: (FontSize: 20, Alignment: Center);
+        Anchor: (Top: 10);
+        Text: "Generation Rate";
+      }
+      $Common.@NumberField #GenerationRateInput {
+        @Anchor = (Width: 60, Top: 1);
+
+        Format: (
+          MaxDecimalPlaces: 1,
+          Step: 1,
+          MinValue: 1,
+          MaxValue: 256
+        );
+      }
+
+      Label #ZoomLabel {
+        Style: (FontSize: 20, Alignment: Center);
+        Anchor: (Top: 10);
+        Text: "Min Zoom";
+      }
+      $Common.@NumberField #MinZoomInput {
+        @Anchor = (Width: 60, Top: 1);
+
+        Format: (
+          MaxDecimalPlaces: 2,
+          Step: 0.1,
+          MinValue: 2,
+          MaxValue: 32
+        );
+      }
+
+      Label #OtherLabel {
+        Style: (FontSize: 20, Alignment: Center);
+        Anchor: (Top: 10);
+        Text: "Other";
+      }
+      Group #A {
+        LayoutMode: Middle;
+        Anchor: (Top: 10, Width: 200);
+
+        $Common.@CheckBoxWithLabel #PerPlayerMapCheck {
+          @Text = "Per player map";
+        }
+      }
+      Group #B {
+        LayoutMode: Middle;
+        Anchor: (Top: 10, Width: 200);
+
+        $Common.@CheckBoxWithLabel #SaveInstTilesCheck {
+          @Text = "Save instance tiles";
+        }
+      }
+
+      $Common.@TextButton #SaveButton {
+        Anchor: (Top: 50, Height: 50);
+        Text: %server.customUI.saveChanges;
+      }
+    }
+  }
+}

@@ -12,6 +12,13 @@
 3. Enjoy!
 
 ### Configuration
+The mod can be configured in-game using the command `/explorersmap`. You will need to be op or have the permission `explorersmap.command` to run the command.
+
+<details>
+  <summary>Show settings UI</summary>
+  <img src="https://i.ibb.co/21sWLtWZ/image.png" alt="Settings UI" />
+</details>
+
 The mod comes with the following configuration file:
 `mods/Cerus_ExplorersMap/ExplorersMap.json`
 ```json5

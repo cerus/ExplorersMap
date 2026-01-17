@@ -63,7 +63,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         }
     }
 
-    private final ExplorersMapConfig config;
+    private ExplorersMapConfig config;
 
     private final ReentrantReadWriteLock loadedLock = new ReentrantReadWriteLock();
     private final CircleSpiralIterator spiralIterator = new CircleSpiralIterator();
@@ -74,10 +74,12 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     private TransformComponent transformComponent;
     private List<ExploredRegion> loadFromDisk;
     private ExplorationData explorationData;
+    private Resolution currentResolution;
 
     public CustomWorldMapTracker(Player player) {
         super(player);
         this.config = ExplorersMapPlugin.getInstance().getConfig().get();
+        this.currentResolution = config.getResolution();
     }
 
     public void tick(float dt) {
@@ -123,7 +125,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         if (loadFromDisk == null) {
             explorationData = ExplorationStorage.getOrLoad(sanitizeWorldName(world), getPlayer().getUuid());
             if (explorationData != null) {
-                ExplorationData dataToUse = ExplorersMapPlugin.getInstance().getConfig().get().isPerPlayerMap()
+                ExplorationData dataToUse = config.isPerPlayerMap()
                         ? explorationData   // use the players own storage
                         : ExplorationStorage.getOrLoad(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL); // use the global storage
                 loadFromDisk = dataToUse.copyRegionsForSending(playerChunkX, playerChunkZ);
@@ -161,7 +163,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             }
 
             // Broadcast to other players
-            if (!ExplorersMapPlugin.getInstance().getConfig().get().isPerPlayerMap()) {
+            if (!config.isPerPlayerMap()) {
                 world.execute(() -> {
                     world.getPlayers().forEach(player -> {
                         if (!player.getUuid().equals(getPlayer().getUuid())
@@ -202,12 +204,11 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
                         MapImage mapImage = future.getNow(null);
 
-                        Resolution resolution = ExplorersMapPlugin.getInstance().getConfig().get().getResolution();
                         if (shouldPersist(world)) {
-                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), resolution, mapImage);
+                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), currentResolution, mapImage);
                         }
 
-                        mapImage = resolution.rescale(mapImage);
+                        mapImage = currentResolution.rescale(mapImage);
                         out.add(new MapChunk(mapChunkX, mapChunkZ, mapImage));
                     }
                 }
@@ -231,14 +232,14 @@ public class CustomWorldMapTracker extends WorldMapTracker {
                     int mapChunkZ = ChunkUtil.zOfChunkIndex(chunkCoordinates);
 
                     if (!this.loaded.contains(chunkCoordinates)) {
-                        Resolution resolution = ExplorersMapPlugin.getInstance().getConfig().get().getResolution();
-                        CompletableFuture<MapImage> future = ExplorersMapPlugin.getInstance().getWorldMapDiskCache().readStoredImageAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), resolution);
+                        CompletableFuture<MapImage> future = ExplorersMapPlugin.getInstance().getWorldMapDiskCache().readStoredImageAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), currentResolution);
                         if (!future.isDone()) {
                             --maxGeneration;
                         } else if (loaded.add(chunkCoordinates)) {
                             iterator.remove();
                             MapImage mapImage = future.getNow(null);
-                            if (mapImage == null) {
+                            int imageSize = MathUtil.fastFloor(32.0F * currentResolution.getScale());
+                            if (mapImage == null || mapImage.width != imageSize || mapImage.height != imageSize) {
                                 loaded.remove(chunkCoordinates);
                                 continue;
                             }
@@ -277,12 +278,11 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
                         MapImage mapImage = future.getNow(null);
 
-                        Resolution resolution = ExplorersMapPlugin.getInstance().getConfig().get().getResolution();
                         if (shouldPersist(world)) {
-                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), resolution, mapImage);
+                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), currentResolution, mapImage);
                         }
 
-                        mapImage = resolution.rescale(mapImage);
+                        mapImage = currentResolution.rescale(mapImage);
                         out.add(new MapChunk(mapChunkX, mapChunkZ, mapImage));
                     }
                 } else {
@@ -320,19 +320,44 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     }
 
     public void reset() {
+        reset(false);
+    }
+
+    public void reset(boolean unload) {
         loadedLock.writeLock().lock();
+
+        if (unload) {
+            int imageSize = MathUtil.fastFloor(32.0F * currentResolution.getScale());
+            int fullMapChunkSize = 23 + 4 * imageSize * imageSize;
+            int packetSize = 2621427;
+
+            List<MapChunk> toRemove = new ArrayList<>();
+            for (long index : loaded) {
+                toRemove.add(new MapChunk(ChunkUtil.xOfChunkIndex(index), ChunkUtil.zOfChunkIndex(index), null));
+                packetSize -= fullMapChunkSize;
+                if (packetSize < fullMapChunkSize) {
+                    writeUpdatePacket(toRemove);
+                    toRemove.clear();
+                    packetSize = 2621427;
+                }
+            }
+            writeUpdatePacket(toRemove);
+        }
+
         try {
             transformComponent = null;
             explorationData = null;
             loaded.clear();
             loadFromDisk = null;
+            config = ExplorersMapPlugin.getInstance().getConfig().get();
+            currentResolution = config.getResolution();
         } finally {
             loadedLock.writeLock().unlock();
         }
     }
 
     private boolean shouldPersist(World world) {
-        return !world.getName().startsWith("instance-") || ExplorersMapPlugin.getInstance().getConfig().get().isSaveInstanceTiles();
+        return !world.getName().startsWith("instance-") || config.isSaveInstanceTiles();
     }
 
     public boolean isLoaded(int chunkX, int chunkZ) {
