@@ -21,12 +21,16 @@ import javax.annotation.Nonnull;
  */
 public class CustomPlayerIconMarkerProvider implements WorldMapManager.MarkerProvider {
 
-    public static final WorldMapManager.MarkerProvider INSTANCE = new CustomPlayerIconMarkerProvider();
+    private final WorldMapManager.MarkerProvider original;
+
+    public CustomPlayerIconMarkerProvider(WorldMapManager.MarkerProvider original) {
+        this.original = original;
+    }
 
     @Override
     public void update(@Nonnull World world, @Nonnull GameplayConfig gameplayConfig, @Nonnull WorldMapTracker tracker, int chunkViewRadius, int playerChunkX, int playerChunkZ) {
         if (!ExplorersMapPlugin.getInstance().getConfig().get().isUnlimitedPlayerTracking()) {
-            PlayerIconMarkerProvider.INSTANCE.update(world, gameplayConfig, tracker, chunkViewRadius, playerChunkX, playerChunkZ);
+            original.update(world, gameplayConfig, tracker, chunkViewRadius, playerChunkX, playerChunkZ);
             return;
         }
 
@@ -60,7 +64,7 @@ public class CustomPlayerIconMarkerProvider implements WorldMapManager.MarkerPro
                 }
             }
 
-            tracker.trySendMarker(chunkViewRadius, playerChunkX, playerChunkZ, otherPos, otherPlayer.getHeadRotation().getYaw(), "Player-" + otherPlayer.getUuid(), "Player: " + otherPlayer.getUsername(), otherPlayer, (id, name, op) -> {
+            tracker.trySendMarker(999, playerChunkX, playerChunkZ, otherPos, otherPlayer.getHeadRotation().getYaw(), "Player-" + otherPlayer.getUuid(), "Player: " + otherPlayer.getUsername(), otherPlayer, (id, name, op) -> {
                 return new MapMarker(id, name, "Player.png", PositionUtil.toTransformPacket(op.getTransform()), null);
             });
         }

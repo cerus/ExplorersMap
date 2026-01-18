@@ -14,11 +14,14 @@ import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 import com.hypixel.hytale.server.core.universe.world.events.AddWorldEvent;
 import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapSettings;
+import com.hypixel.hytale.server.core.universe.world.worldmap.markers.PlayerIconMarkerProvider;
 import com.hypixel.hytale.server.core.util.Config;
 import com.hypixel.hytale.unsafe.UnsafeUtil;
 import dev.cerus.explorersmap.command.ExplorersMapCommand;
 import dev.cerus.explorersmap.config.ExplorersMapConfig;
+import dev.cerus.explorersmap.map.CustomPlayerIconMarkerProvider;
 import dev.cerus.explorersmap.map.CustomWorldMapTracker;
 import dev.cerus.explorersmap.map.WorldMapDiskCache;
 import dev.cerus.explorersmap.storage.ExplorationStorage;
@@ -113,8 +116,9 @@ public class ExplorersMapPlugin extends JavaPlugin {
     private void onWorldAdd(AddWorldEvent event) {
         ExplorationStorage.load(CustomWorldMapTracker.sanitizeWorldName(event.getWorld()), ExplorationStorage.UUID_GLOBAL);
 
-        // This does not work - the client only seems to render markers that are inside the view distance.
-        //event.getWorld().getWorldMapManager().addMarkerProvider("playerIcons", CustomPlayerIconMarkerProvider.INSTANCE);
+        WorldMapManager worldMapManager = event.getWorld().getWorldMapManager();
+        WorldMapManager.MarkerProvider original = worldMapManager.getMarkerProviders().getOrDefault("playerIcons", PlayerIconMarkerProvider.INSTANCE);
+        worldMapManager.addMarkerProvider("playerIcons", new CustomPlayerIconMarkerProvider(original));
     }
 
     private void onWorldRemove(RemoveWorldEvent event) {

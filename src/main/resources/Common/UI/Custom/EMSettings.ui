@@ -109,6 +109,14 @@ $Common.@PageOverlay {
           @Text = "Save instance tiles";
         }
       }
+      Group #C {
+        LayoutMode: Middle;
+        Anchor: (Top: 10, Width: 200);
+
+        $Common.@CheckBoxWithLabel #UnlimitedTrackingCheck {
+          @Text = "Unlimited player tracking";
+        }
+      }
 
       $Common.@TextButton #SaveButton {
         Anchor: (Top: 50, Height: 50);

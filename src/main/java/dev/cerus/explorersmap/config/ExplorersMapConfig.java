@@ -29,10 +29,9 @@ public class ExplorersMapConfig {
             .append(new KeyedCodec<>("Resolution", Codec.STRING),
                     ExplorersMapConfig::setResolutionType,
                     ExplorersMapConfig::getResolutionType).add()
-            // This does not work right now
-            /*.append(new KeyedCodec<>("UnlimitedPlayerTracking", Codec.BOOLEAN),
+            .append(new KeyedCodec<>("UnlimitedPlayerTracking", Codec.BOOLEAN),
                     ExplorersMapConfig::setUnlimitedPlayerTracking,
-                    ExplorersMapConfig::isUnlimitedPlayerTracking).add()*/
+                    ExplorersMapConfig::isUnlimitedPlayerTracking).add()
             .build();
 
     private int explorationRadius = 3;

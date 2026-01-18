@@ -7,6 +7,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
+import com.hypixel.hytale.protocol.packets.worldmap.UpdateWorldMapSettings;
 import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -20,6 +21,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapSettings;
 import com.hypixel.hytale.server.core.util.Config;
 import dev.cerus.explorersmap.ExplorersMapPlugin;
 import dev.cerus.explorersmap.config.ExplorersMapConfig;
@@ -91,6 +93,12 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
                 """);
         uiCommandBuilder.set("#SaveInstTilesCheck #CheckBox.Value", config.isSaveInstanceTiles());
 
+        uiCommandBuilder.set("#UnlimitedTrackingCheck.TooltipText", """
+                When set to true, you will always see other players on your map.
+                Be aware that other mods could influence this behavior.
+                """);
+        uiCommandBuilder.set("#UnlimitedTrackingCheck #CheckBox.Value", config.isUnlimitedPlayerTracking());
+
         uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#SaveButton", new EventData()
                 .append("@ResDropdown", "#ResDropdown.Value")
                 .append("@ExplorationRadiusInput", "#ExplorationRadiusInput.Value")
@@ -98,7 +106,8 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
                 .append("@GenerationRateInput", "#GenerationRateInput.Value")
                 .append("@MinZoomInput", "#MinZoomInput.Value")
                 .append("@PerPlayerMapCheck", "#PerPlayerMapCheck #CheckBox.Value")
-                .append("@SaveInstTilesCheck", "#SaveInstTilesCheck #CheckBox.Value"));
+                .append("@SaveInstTilesCheck", "#SaveInstTilesCheck #CheckBox.Value")
+                .append("@UnlimitedTrackingCheck", "#UnlimitedTrackingCheck #CheckBox.Value"));
     }
 
     @Override
@@ -107,6 +116,9 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
 
         Config<ExplorersMapConfig> config = ExplorersMapPlugin.getInstance().getConfig();
         ExplorersMapConfig confObj = config.get();
+
+        boolean zoomChanged = confObj.getMinZoom() != data.getMinZoom();
+
         confObj.setResolution(data.getResolution());
         confObj.setExplorationRadius(data.getExplorationRadius());
         confObj.setDiskLoadRate(data.getDiskLoadRate());
@@ -114,15 +126,27 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
         confObj.setMinZoom(data.getMinZoom());
         confObj.setPerPlayerMap(data.isPerPlayerMap());
         confObj.setSaveInstanceTiles(data.isSaveInstanceTiles());
+        confObj.setUnlimitedPlayerTracking(data.isUnlimitedPlayerTracking());
         config.save();
 
         for (World world : Universe.get().getWorlds().values()) {
             world.execute(() -> {
+                if (zoomChanged) {
+                    // Allow more zoom
+                    WorldMapSettings worldMapSettings = world.getWorldMapManager().getWorldMapSettings();
+                    UpdateWorldMapSettings settingsPacket = worldMapSettings.getSettingsPacket();
+                    float minZoom = config.get().getMinZoom();
+                    settingsPacket.minScale = Math.min(settingsPacket.maxScale, Math.max(2, minZoom));
+                }
+
                 ExplorersMapPlugin.getInstance().getWorldMapDiskCache().clearCache(world);
                 for (PlayerRef worldPlayerRef : world.getPlayerRefs()) {
                     Player player = world.getEntityStore().getStore().getComponent(worldPlayerRef.getReference(), Player.getComponentType());
                     if (player.getWorldMapTracker() instanceof CustomWorldMapTracker custom) {
                         custom.reset(true);
+                    }
+                    if (zoomChanged) {
+                        player.getWorldMapTracker().sendSettings(world);
                     }
                 }
             });
@@ -141,6 +165,7 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
                 .append(new KeyedCodec<>("@MinZoomInput", Codec.FLOAT), Data::setMinZoom, Data::getMinZoom).add()
                 .append(new KeyedCodec<>("@PerPlayerMapCheck", Codec.BOOLEAN), Data::setPerPlayerMap, Data::isPerPlayerMap).add()
                 .append(new KeyedCodec<>("@SaveInstTilesCheck", Codec.BOOLEAN), Data::setSaveInstanceTiles, Data::isSaveInstanceTiles).add()
+                .append(new KeyedCodec<>("@UnlimitedTrackingCheck", Codec.BOOLEAN), Data::setUnlimitedPlayerTracking, Data::isUnlimitedPlayerTracking).add()
                 .build();
 
         private int explorationRadius;
@@ -149,20 +174,8 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
         private int generationRate;
         private float minZoom;
         private boolean saveInstanceTiles;
+        private boolean unlimitedPlayerTracking;
         private Resolution resolution;
-
-        @Override
-        public String toString() {
-            return "Data{" +
-                   "explorationRadius=" + explorationRadius +
-                   ", perPlayerMap=" + perPlayerMap +
-                   ", diskLoadRate=" + diskLoadRate +
-                   ", generationRate=" + generationRate +
-                   ", minZoom=" + minZoom +
-                   ", saveInstanceTiles=" + saveInstanceTiles +
-                   ", resolution=" + resolution.getType() +
-                   '}';
-        }
 
         public void setExplorationRadius(int explorationRadius) {
             this.explorationRadius = explorationRadius;
@@ -210,6 +223,14 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
 
         public boolean isSaveInstanceTiles() {
             return saveInstanceTiles;
+        }
+
+        public void setUnlimitedPlayerTracking(boolean unlimitedPlayerTracking) {
+            this.unlimitedPlayerTracking = unlimitedPlayerTracking;
+        }
+
+        public boolean isUnlimitedPlayerTracking() {
+            return unlimitedPlayerTracking;
         }
 
         public void setResolutionType(String str) {

@@ -2,7 +2,6 @@ package dev.cerus.explorersmap.map;
 
 import com.hypixel.hytale.common.fastutil.HLongOpenHashSet;
 import com.hypixel.hytale.common.fastutil.HLongSet;
-import com.hypixel.hytale.component.IResourceStorage;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.iterator.CircleSpiralIterator;
 import com.hypixel.hytale.math.util.ChunkUtil;
@@ -29,7 +28,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -66,6 +64,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     private ExplorersMapConfig config;
 
     private final ReentrantReadWriteLock loadedLock = new ReentrantReadWriteLock();
+    private final ReentrantReadWriteLock tickLock = new ReentrantReadWriteLock();
     private final CircleSpiralIterator spiralIterator = new CircleSpiralIterator();
     private final HLongSet loaded = new HLongOpenHashSet();
     private final HLongSet pendingReloadChunks = new HLongOpenHashSet();
@@ -83,6 +82,16 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     }
 
     public void tick(float dt) {
+        tickLock.writeLock().lock();
+        try {
+            tick0(dt);
+        } finally {
+            tickLock.writeLock().unlock();
+        }
+    }
+
+    private void tick0(float dt) {
+
         if (!this.started) {
             this.started = true;
             LOGGER.at(Level.INFO).log("Started Generating Map!");
@@ -109,7 +118,9 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         WorldMapManager worldMapManager = world.getWorldMapManager();
         WorldMapSettings worldMapSettings = worldMapManager.getWorldMapSettings();
         int viewRadius;
-        if (this.getViewRadiusOverride() != null) {
+        /*if (config.isUnlimitedPlayerTracking()) {
+            viewRadius = 999;
+        } else*/ if (this.getViewRadiusOverride() != null) {
             viewRadius = this.getViewRadiusOverride();
         } else {
             viewRadius = worldMapSettings.getViewRadius(getPlayer().getViewRadius());
@@ -205,7 +216,11 @@ public class CustomWorldMapTracker extends WorldMapTracker {
                         MapImage mapImage = future.getNow(null);
 
                         if (shouldPersist(world)) {
-                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), currentResolution, mapImage);
+                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), currentResolution, mapImage).whenComplete((unused, throwable) -> {
+                                if (throwable != null) {
+                                    LOGGER.atSevere().log("Failed to save map tile", throwable);
+                                }
+                            });
                         }
 
                         mapImage = currentResolution.rescale(mapImage);
@@ -279,7 +294,11 @@ public class CustomWorldMapTracker extends WorldMapTracker {
                         MapImage mapImage = future.getNow(null);
 
                         if (shouldPersist(world)) {
-                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), currentResolution, mapImage);
+                            ExplorersMapPlugin.getInstance().getWorldMapDiskCache().saveImageToDiskAsync(world, mapChunkX, mapChunkZ, worldMapSettings.getImageScale(), currentResolution, mapImage).whenComplete((unused, throwable) -> {
+                                if (throwable != null) {
+                                    LOGGER.atSevere().log("Failed to save map tile", throwable);
+                                }
+                            });
                         }
 
                         mapImage = currentResolution.rescale(mapImage);
@@ -319,12 +338,18 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         getPlayer().getPlayerConnection().write((Packet) packet);
     }
 
+    @Override
+    public void clear() {
+        reset(true);
+    }
+
     public void reset() {
         reset(false);
     }
 
     public void reset(boolean unload) {
         loadedLock.writeLock().lock();
+        tickLock.writeLock().lock();
 
         if (unload) {
             int imageSize = MathUtil.fastFloor(32.0F * currentResolution.getScale());
@@ -353,6 +378,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             currentResolution = config.getResolution();
         } finally {
             loadedLock.writeLock().unlock();
+            tickLock.writeLock().unlock();
         }
     }
 
