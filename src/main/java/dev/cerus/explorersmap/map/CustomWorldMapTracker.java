@@ -12,7 +12,6 @@ import com.hypixel.hytale.protocol.packets.worldmap.MapChunk;
 import com.hypixel.hytale.protocol.packets.worldmap.MapImage;
 import com.hypixel.hytale.protocol.packets.worldmap.UpdateWorldMap;
 import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
@@ -161,17 +160,22 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
         if (!toSend.isEmpty()) {
             if (shouldPersist(world)) {
+                // Mark loaded area as explored
                 toSend.forEach(chunk -> {
-                    if (explorationData != null) explorationData.markExplored(chunk);
+                    if (explorationData != null) {
+                        explorationData.markExplored(chunk);
+                    }
                     ExplorationStorage.getOrLoad(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL).markExplored(chunk);
                 });
             }
 
             if (!config.isPerPlayerMap()) {
+
+                // Broadcast to other players
                 world.execute(() -> {
                     world.getPlayers().forEach(player -> {
                         if (!player.getUuid().equals(getPlayer().getUuid())
-                                && player.getWorldMapTracker() instanceof CustomWorldMapTracker customWorldMapTracker) {
+                            && player.getWorldMapTracker() instanceof CustomWorldMapTracker customWorldMapTracker) {
                             customWorldMapTracker.writeUpdatePacket(toSend);
                         }
                     });
@@ -179,7 +183,10 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             }
         }
 
+        // Reload pending chunks (from building tools or mods)
         maxGeneration = reloadPending(world, worldMapSettings, maxGeneration, toSend);
+
+        // Send pending already explored tiles
         loadStored(world, worldMapSettings, config.getDiskLoadRate(), toSend);
 
         if (!toSend.isEmpty()) {
@@ -223,7 +230,10 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     }
 
     private int loadStored(World world, WorldMapSettings worldMapSettings, int maxGeneration, List<MapChunk> out) {
-        if (loadFromDisk == null) return maxGeneration;
+        if (loadFromDisk == null) {
+            return maxGeneration;
+        }
+
         loadedLock.writeLock().lock();
         try {
             Iterator<ExploredRegion> regionIterator = loadFromDisk.iterator();

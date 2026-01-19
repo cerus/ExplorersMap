@@ -55,7 +55,7 @@ public class ExplorersMapPlugin extends JavaPlugin {
 
         worldMapDiskCache = new WorldMapDiskCache(getDataDirectory().resolve("tiles"));
 
-        this.getEntityStoreRegistry().registerSystem(new MapSyncSystem());
+        getEntityStoreRegistry().registerSystem(new MapSyncSystem());
 
         getEventRegistry().registerGlobal(AddPlayerToWorldEvent.class, this::onPlayerAddToWorld);
         getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, this::onPlayerDisconnect);
@@ -80,21 +80,19 @@ public class ExplorersMapPlugin extends JavaPlugin {
         UUID playerUuid = player.getUuid();
 
         CompletableFuture.runAsync(() -> {
-                    ExplorationStorage.load(sanitizedName, playerUuid);
-                })
-                .thenRunAsync(() -> {
-                    WorldMapSettings worldMapSettings = world.getWorldMapManager().getWorldMapSettings();
-                    UpdateWorldMapSettings settingsPacket = worldMapSettings.getSettingsPacket();
-                    float minZoom = config.get().getMinZoom();
+            ExplorationStorage.load(sanitizedName, playerUuid);
+        }).thenRunAsync(() -> {
+            WorldMapSettings worldMapSettings = world.getWorldMapManager().getWorldMapSettings();
+            UpdateWorldMapSettings settingsPacket = worldMapSettings.getSettingsPacket();
+            float minZoom = config.get().getMinZoom();
 
-                    if (settingsPacket.minScale > minZoom && minZoom < settingsPacket.maxScale) {
-                        settingsPacket.minScale = Math.max(2, minZoom);
-                        player.getWorldMapTracker().sendSettings(world);
-                    }
+            if (settingsPacket.minScale > minZoom && minZoom < settingsPacket.maxScale) {
+                settingsPacket.minScale = Math.max(2, minZoom);
+                player.getWorldMapTracker().sendSettings(world);
+            }
 
-                    injectCustomTracker(player);
-
-                }, world);
+            injectCustomTracker(player);
+        }, world);
     }
 
     private void injectCustomTracker(Player player) {
@@ -119,8 +117,6 @@ public class ExplorersMapPlugin extends JavaPlugin {
 
     private void onPlayerDisconnect(PlayerDisconnectEvent event) {
         UUID uuid = event.getPlayerRef().getUuid();
-        // Unloading is generally safe async, but often safer in an async block
-        // if it involves heavy file cleanup
         CompletableFuture.runAsync(() -> ExplorationStorage.unloadFromAll(uuid));
     }
 
