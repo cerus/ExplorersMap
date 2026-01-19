@@ -23,10 +23,12 @@ import dev.cerus.explorersmap.command.ExplorersMapCommand;
 import dev.cerus.explorersmap.config.ExplorersMapConfig;
 import dev.cerus.explorersmap.map.CustomPlayerIconMarkerProvider;
 import dev.cerus.explorersmap.map.CustomWorldMapTracker;
+import dev.cerus.explorersmap.map.MapSyncSystem;
 import dev.cerus.explorersmap.map.WorldMapDiskCache;
 import dev.cerus.explorersmap.storage.ExplorationStorage;
 import java.lang.reflect.Field;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import javax.annotation.Nonnull;
 
 public class ExplorersMapPlugin extends JavaPlugin {
@@ -53,6 +55,8 @@ public class ExplorersMapPlugin extends JavaPlugin {
 
         worldMapDiskCache = new WorldMapDiskCache(getDataDirectory().resolve("tiles"));
 
+        this.getEntityStoreRegistry().registerSystem(new MapSyncSystem());
+
         getEventRegistry().registerGlobal(AddPlayerToWorldEvent.class, this::onPlayerAddToWorld);
         getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, this::onPlayerDisconnect);
         getEventRegistry().registerGlobal(AddWorldEvent.class, this::onWorldAdd);
@@ -69,39 +73,47 @@ public class ExplorersMapPlugin extends JavaPlugin {
     private void onPlayerAddToWorld(AddPlayerToWorldEvent event) {
         Holder<EntityStore> holder = event.getHolder();
         Player player = holder.getComponent(Player.getComponentType());
-        if (player == null) {
-            // sanity check
-            return;
-        }
+        if (player == null) return;
 
         World world = event.getWorld();
+        String sanitizedName = CustomWorldMapTracker.sanitizeWorldName(world);
+        UUID playerUuid = player.getUuid();
 
-        // Allow more zoom
-        WorldMapSettings worldMapSettings = world.getWorldMapManager().getWorldMapSettings();
-        UpdateWorldMapSettings settingsPacket = worldMapSettings.getSettingsPacket();
-        float minZoom = config.get().getMinZoom();
-        if (settingsPacket.minScale > minZoom && minZoom < settingsPacket.maxScale) {
-            settingsPacket.minScale = Math.max(2, minZoom);
-            player.getWorldMapTracker().sendSettings(world);
-        }
+        // FIX: Load exploration data asynchronously to prevent blocking the event thread
+        CompletableFuture.runAsync(() -> {
+            ExplorationStorage.load(sanitizedName, playerUuid);
+        }).thenRun(() -> {
+            // FIX: Use world.execute to safely modify player state and trackers
+            world.execute(() -> {
+                // Allow more zoom safely on world thread
+                WorldMapSettings worldMapSettings = world.getWorldMapManager().getWorldMapSettings();
+                UpdateWorldMapSettings settingsPacket = worldMapSettings.getSettingsPacket();
+                float minZoom = config.get().getMinZoom();
 
-        // Load exploration data
-        ExplorationStorage.load(CustomWorldMapTracker.sanitizeWorldName(world), player.getUuid());
+                if (settingsPacket.minScale > minZoom && minZoom < settingsPacket.maxScale) {
+                    settingsPacket.minScale = Math.max(2, minZoom);
+                    player.getWorldMapTracker().sendSettings(world);
+                }
 
+                injectCustomTracker(player);
+            });
+        });
+    }
+
+    private void injectCustomTracker(Player player) {
         if (player.getWorldMapTracker().getClass() != WorldMapTracker.class) {
             if (player.getWorldMapTracker() instanceof CustomWorldMapTracker custom) {
                 custom.reset();
                 return;
             }
-            // Another mod has injected their stuff, abort
             LOGGER.atWarning().log("Failed to inject custom tracker due to mod incompatibility!");
             return;
         }
 
-        // Inject custom world map tracker
         try {
             Field field = player.getClass().getDeclaredField("worldMapTracker");
             long off = UnsafeUtil.UNSAFE.objectFieldOffset(field);
+            // Safe here because we are inside world.execute()
             UnsafeUtil.UNSAFE.putObject(player, off, new CustomWorldMapTracker(player));
         } catch (NoSuchFieldException e) {
             LOGGER.atSevere().log("Failed to inject custom tracker", e);
@@ -110,26 +122,31 @@ public class ExplorersMapPlugin extends JavaPlugin {
 
     private void onPlayerDisconnect(PlayerDisconnectEvent event) {
         UUID uuid = event.getPlayerRef().getUuid();
-        ExplorationStorage.unloadFromAll(uuid);
+        // Unloading is generally safe async, but often safer in an async block
+        // if it involves heavy file cleanup
+        CompletableFuture.runAsync(() -> ExplorationStorage.unloadFromAll(uuid));
     }
 
     private void onWorldAdd(AddWorldEvent event) {
-        ExplorationStorage.load(CustomWorldMapTracker.sanitizeWorldName(event.getWorld()), ExplorationStorage.UUID_GLOBAL);
+        World world = event.getWorld();
+        String sanitizedName = CustomWorldMapTracker.sanitizeWorldName(world);
 
-        WorldMapManager worldMapManager = event.getWorld().getWorldMapManager();
-        WorldMapManager.MarkerProvider original = worldMapManager.getMarkerProviders().getOrDefault("playerIcons", PlayerIconMarkerProvider.INSTANCE);
+        CompletableFuture.runAsync(() -> {
+            ExplorationStorage.load(sanitizedName, ExplorationStorage.UUID_GLOBAL);
+        });
+
+        // Registry changes are safe on WorldAddEvent as it is a lifecycle event
+        WorldMapManager worldMapManager = world.getWorldMapManager();
+        WorldMapManager.MarkerProvider original = worldMapManager.getMarkerProviders()
+                .getOrDefault("playerIcons", PlayerIconMarkerProvider.INSTANCE);
         worldMapManager.addMarkerProvider("playerIcons", new CustomPlayerIconMarkerProvider(original));
     }
 
     private void onWorldRemove(RemoveWorldEvent event) {
-        ExplorationStorage.unload(CustomWorldMapTracker.sanitizeWorldName(event.getWorld()), ExplorationStorage.UUID_GLOBAL);
+        String sanitizedName = CustomWorldMapTracker.sanitizeWorldName(event.getWorld());
+        CompletableFuture.runAsync(() -> ExplorationStorage.unload(sanitizedName, ExplorationStorage.UUID_GLOBAL));
     }
 
-    public Config<ExplorersMapConfig> getConfig() {
-        return config;
-    }
-
-    public WorldMapDiskCache getWorldMapDiskCache() {
-        return worldMapDiskCache;
-    }
+    public Config<ExplorersMapConfig> getConfig() { return config; }
+    public WorldMapDiskCache getWorldMapDiskCache() { return worldMapDiskCache; }
 }

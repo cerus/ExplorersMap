@@ -31,13 +31,14 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
 import javax.annotation.Nonnull;
 
 /**
- * Custom map tracker implementation
+ * Custom map tracker implementation - Fixed for Thread Safety
  */
 public class CustomWorldMapTracker extends WorldMapTracker {
 
@@ -69,8 +70,11 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     private final HLongSet loaded = new HLongOpenHashSet();
     private final HLongSet pendingReloadChunks = new HLongOpenHashSet();
 
+    // FIXED: Atomic reference to store position data pushed from the World Thread
+    private final AtomicReference<Vector3d> safePosition = new AtomicReference<>(new Vector3d(0, 0, 0));
+
     private boolean started;
-    private TransformComponent transformComponent;
+    private TransformComponent transformComponent; // Note: We keep this for internal superclass compatibility but avoid calling it on the ticking thread
     private List<ExploredRegion> loadFromDisk;
     private ExplorationData explorationData;
     private Resolution currentResolution;
@@ -79,6 +83,13 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         super(player);
         this.config = ExplorersMapPlugin.getInstance().getConfig().get();
         this.currentResolution = config.getResolution();
+    }
+
+    /**
+     * Called by MapSyncSystem on the World Thread to safely bridge the data.
+     */
+    public void pushSafePosition(Vector3d position) {
+        this.safePosition.set(position);
     }
 
     public void tick(float dt) {
@@ -91,7 +102,6 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     }
 
     private void tick0(float dt) {
-
         if (!this.started) {
             this.started = true;
             LOGGER.at(Level.INFO).log("Started Generating Map!");
@@ -102,49 +112,37 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             return;
         }
 
-        if (this.transformComponent == null) {
-            this.transformComponent = getPlayer().getTransformComponent();
-            if (this.transformComponent == null) {
-                return;
-            }
+        // FIXED: Instead of calling getTransformComponent() which triggers the Async warning,
+        // we use the position pushed into our safe AtomicReference.
+        Vector3d position = this.safePosition.get();
 
-            try {
-                TRANSFORM_COMPONENT_FIELD.set(this, transformComponent);
-            } catch (IllegalAccessException e) {
-                LOGGER.atSevere().log("Failed to set transformComponent", e);
-            }
-        }
-
-        WorldMapManager worldMapManager = world.getWorldMapManager();
-        WorldMapSettings worldMapSettings = worldMapManager.getWorldMapSettings();
-        int viewRadius;
-        /*if (config.isUnlimitedPlayerTracking()) {
-            viewRadius = 999;
-        } else*/ if (this.getViewRadiusOverride() != null) {
-            viewRadius = this.getViewRadiusOverride();
-        } else {
-            viewRadius = worldMapSettings.getViewRadius(getPlayer().getViewRadius());
-        }
-
-        Vector3d position = this.transformComponent.getPosition();
         int playerX = MathUtil.floor(position.getX());
         int playerZ = MathUtil.floor(position.getZ());
         int playerChunkX = playerX >> 5;
         int playerChunkZ = playerZ >> 5;
+
+        WorldMapManager worldMapManager = world.getWorldMapManager();
+        WorldMapSettings worldMapSettings = worldMapManager.getWorldMapSettings();
+        int viewRadius;
+
+        if (this.getViewRadiusOverride() != null) {
+            viewRadius = this.getViewRadiusOverride();
+        } else {
+            viewRadius = worldMapSettings.getViewRadius(getPlayer().getViewRadius());
+        }
 
         // Load already explored tiles to send to the player
         if (loadFromDisk == null) {
             explorationData = ExplorationStorage.getOrLoad(sanitizeWorldName(world), getPlayer().getUuid());
             if (explorationData != null) {
                 ExplorationData dataToUse = config.isPerPlayerMap()
-                        ? explorationData   // use the players own storage
-                        : ExplorationStorage.getOrLoad(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL); // use the global storage
+                        ? explorationData
+                        : ExplorationStorage.getOrLoad(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL);
                 loadFromDisk = dataToUse.copyRegionsForSending(playerChunkX, playerChunkZ);
             }
         }
 
         if (world.isCompassUpdating()) {
-            //this.updatePointsOfInterest(world, viewRadius, playerChunkX, playerChunkZ);
             try {
                 POI_UPDATE_METHOD.invoke(this, world, viewRadius, playerChunkX, playerChunkZ);
             } catch (IllegalAccessException | InvocationTargetException e) {
@@ -153,7 +151,6 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         }
 
         if (worldMapManager.isWorldMapEnabled()) {
-            //this.updateWorldMap(world, dt, worldMapSettings, viewRadius, playerChunkX, playerChunkZ);
             tickWorldMap(world, worldMapSettings, playerChunkX, playerChunkZ, config.getGenerationRate());
         }
     }
@@ -161,24 +158,21 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     private void tickWorldMap(World world, WorldMapSettings worldMapSettings, int playerChunkX, int playerChunkZ, int maxGeneration) {
         List<MapChunk> toSend = new ArrayList<>();
 
-        // Load area around player
         maxGeneration = loadArea(world, worldMapSettings, playerChunkX, playerChunkZ, maxGeneration, toSend);
 
         if (!toSend.isEmpty()) {
-            // Mark loaded area as explored
             if (shouldPersist(world)) {
                 toSend.forEach(chunk -> {
-                    explorationData.markExplored(chunk);
+                    if (explorationData != null) explorationData.markExplored(chunk);
                     ExplorationStorage.getOrLoad(sanitizeWorldName(world), ExplorationStorage.UUID_GLOBAL).markExplored(chunk);
                 });
             }
 
-            // Broadcast to other players
             if (!config.isPerPlayerMap()) {
                 world.execute(() -> {
                     world.getPlayers().forEach(player -> {
                         if (!player.getUuid().equals(getPlayer().getUuid())
-                            && player.getWorldMapTracker() instanceof CustomWorldMapTracker customWorldMapTracker) {
+                                && player.getWorldMapTracker() instanceof CustomWorldMapTracker customWorldMapTracker) {
                             customWorldMapTracker.writeUpdatePacket(toSend);
                         }
                     });
@@ -186,17 +180,12 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             }
         }
 
-        // Reload pending chunks (from building tools or mods)
         maxGeneration = reloadPending(world, worldMapSettings, maxGeneration, toSend);
-
-        // Send pending already explored tiles
         loadStored(world, worldMapSettings, config.getDiskLoadRate(), toSend);
 
-        if (toSend.isEmpty()) {
-            return;
+        if (!toSend.isEmpty()) {
+            writeUpdatePacket(toSend);
         }
-
-        writeUpdatePacket(toSend);
     }
 
     private int loadArea(World world, WorldMapSettings worldMapSettings, int playerChunkX, int playerChunkZ, int maxGeneration, List<MapChunk> out) {
@@ -235,6 +224,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     }
 
     private int loadStored(World world, WorldMapSettings worldMapSettings, int maxGeneration, List<MapChunk> out) {
+        if (loadFromDisk == null) return maxGeneration;
         loadedLock.writeLock().lock();
         try {
             Iterator<ExploredRegion> regionIterator = loadFromDisk.iterator();
@@ -316,8 +306,6 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
     @Override
     public void clearChunks(@Nonnull LongSet chunkIndices) {
-        LOGGER.atInfo().log("Reloading " + chunkIndices.size() + " chunks for " + getPlayer().getDisplayName());
-
         this.loadedLock.writeLock().lock();
         try {
             chunkIndices.forEach((index) -> {
@@ -334,7 +322,6 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
     private void writeUpdatePacket(List<MapChunk> list) {
         UpdateWorldMap packet = new UpdateWorldMap(list.toArray(MapChunk[]::new), null, null);
-        LOGGER.at(Level.FINE).log("Sending world map update to %s - %d chunks", getPlayer().getUuid(), list.size());
         getPlayer().getPlayerConnection().write((Packet) packet);
     }
 
@@ -370,7 +357,6 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         }
 
         try {
-            transformComponent = null;
             explorationData = null;
             loaded.clear();
             loadFromDisk = null;
