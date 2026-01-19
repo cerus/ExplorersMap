@@ -79,25 +79,22 @@ public class ExplorersMapPlugin extends JavaPlugin {
         String sanitizedName = CustomWorldMapTracker.sanitizeWorldName(world);
         UUID playerUuid = player.getUuid();
 
-        // FIX: Load exploration data asynchronously to prevent blocking the event thread
         CompletableFuture.runAsync(() -> {
-            ExplorationStorage.load(sanitizedName, playerUuid);
-        }).thenRun(() -> {
-            // FIX: Use world.execute to safely modify player state and trackers
-            world.execute(() -> {
-                // Allow more zoom safely on world thread
-                WorldMapSettings worldMapSettings = world.getWorldMapManager().getWorldMapSettings();
-                UpdateWorldMapSettings settingsPacket = worldMapSettings.getSettingsPacket();
-                float minZoom = config.get().getMinZoom();
+                    ExplorationStorage.load(sanitizedName, playerUuid);
+                })
+                .thenRunAsync(() -> {
+                    WorldMapSettings worldMapSettings = world.getWorldMapManager().getWorldMapSettings();
+                    UpdateWorldMapSettings settingsPacket = worldMapSettings.getSettingsPacket();
+                    float minZoom = config.get().getMinZoom();
 
-                if (settingsPacket.minScale > minZoom && minZoom < settingsPacket.maxScale) {
-                    settingsPacket.minScale = Math.max(2, minZoom);
-                    player.getWorldMapTracker().sendSettings(world);
-                }
+                    if (settingsPacket.minScale > minZoom && minZoom < settingsPacket.maxScale) {
+                        settingsPacket.minScale = Math.max(2, minZoom);
+                        player.getWorldMapTracker().sendSettings(world);
+                    }
 
-                injectCustomTracker(player);
-            });
-        });
+                    injectCustomTracker(player);
+
+                }, world);
     }
 
     private void injectCustomTracker(Player player) {
@@ -147,6 +144,11 @@ public class ExplorersMapPlugin extends JavaPlugin {
         CompletableFuture.runAsync(() -> ExplorationStorage.unload(sanitizedName, ExplorationStorage.UUID_GLOBAL));
     }
 
-    public Config<ExplorersMapConfig> getConfig() { return config; }
-    public WorldMapDiskCache getWorldMapDiskCache() { return worldMapDiskCache; }
+    public Config<ExplorersMapConfig> getConfig() {
+        return config;
+    }
+
+    public WorldMapDiskCache getWorldMapDiskCache() {
+        return worldMapDiskCache;
+    }
 }

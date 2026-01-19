@@ -74,7 +74,6 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     private final AtomicReference<Vector3d> safePosition = new AtomicReference<>(new Vector3d(0, 0, 0));
 
     private boolean started;
-    private TransformComponent transformComponent; // Note: We keep this for internal superclass compatibility but avoid calling it on the ticking thread
     private List<ExploredRegion> loadFromDisk;
     private ExplorationData explorationData;
     private Resolution currentResolution;
