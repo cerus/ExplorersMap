@@ -1,6 +1,8 @@
 package dev.cerus.explorersmap;
 
 import com.hypixel.hytale.component.Holder;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.component.system.DelayedSystem;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.protocol.packets.worldmap.UpdateWorldMapSettings;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -61,13 +63,23 @@ public class ExplorersMapPlugin extends JavaPlugin {
         getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, this::onPlayerDisconnect);
         getEventRegistry().registerGlobal(AddWorldEvent.class, this::onWorldAdd);
         getEventRegistry().registerGlobal(RemoveWorldEvent.class, this::onWorldRemove);
-        getEventRegistry().registerGlobal(ShutdownEvent.class, this::onShutdown);
 
         getCommandRegistry().registerCommand(new ExplorersMapCommand("explorersmap", "Open Explorers Map settings"));
+
+        getEntityStoreRegistry().registerSystem(new DelayedSystem<>(60) {
+            @Override
+            public void delayedTick(float v, int i, @Nonnull Store<EntityStore> store) {
+                CompletableFuture.runAsync(() -> {
+                    ExplorationStorage.saveAll(CustomWorldMapTracker.sanitizeWorldName(store.getExternalData().getWorld()));
+                });
+            }
+        });
     }
 
-    private void onShutdown(ShutdownEvent event) {
+    @Override
+    protected void shutdown() {
         ExplorationStorage.unloadFromAll(ExplorationStorage.UUID_GLOBAL);
+        LOGGER.atInfo().log("Explorers Map plugin has been shut down.");
     }
 
     private void onPlayerAddToWorld(AddPlayerToWorldEvent event) {
