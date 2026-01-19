@@ -78,7 +78,7 @@ public interface Resolution {
 
         private BufferedImage resizeImage(BufferedImage originalImage, int targetWidth, int targetHeight) {
             Image resultingImage = originalImage.getScaledInstance(targetWidth, targetHeight, Image.SCALE_SMOOTH);
-            BufferedImage outputImage = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB);
+            BufferedImage outputImage = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
             outputImage.getGraphics().drawImage(resultingImage, 0, 0, null);
             return outputImage;
         }

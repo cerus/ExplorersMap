@@ -5,6 +5,7 @@ import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
 import com.hypixel.hytale.protocol.packets.worldmap.UpdateWorldMapSettings;
@@ -117,6 +118,11 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
         Config<ExplorersMapConfig> config = ExplorersMapPlugin.getInstance().getConfig();
         ExplorersMapConfig confObj = config.get();
 
+        if (data.getResolution() == null || data.getExplorationRadius() <= 0 || data.getDiskLoadRate() <= 0 || data.getGenerationRate() <= 0 || data.getMinZoom() <= 0) {
+            HytaleLogger.forEnclosingClass().atWarning().log("Received invalid settings packet");
+            return;
+        }
+
         boolean zoomChanged = confObj.getMinZoom() != data.getMinZoom();
 
         confObj.setResolution(data.getResolution());
@@ -127,6 +133,7 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
         confObj.setPerPlayerMap(data.isPerPlayerMap());
         confObj.setSaveInstanceTiles(data.isSaveInstanceTiles());
         confObj.setUnlimitedPlayerTracking(data.isUnlimitedPlayerTracking());
+        confObj.validate();
         config.save();
 
         for (World world : Universe.get().getWorlds().values()) {

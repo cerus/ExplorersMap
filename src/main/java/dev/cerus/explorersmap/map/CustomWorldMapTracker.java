@@ -27,6 +27,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -43,6 +44,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
     private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
     private static final Pattern INSTANCE_SUFFIX_PATTERN = Pattern.compile("-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    private static final int UNLOAD_RATE = 100;
 
     private static Method POI_UPDATE_METHOD;
     private static Field TRANSFORM_COMPONENT_FIELD;
@@ -176,7 +178,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
                     world.getPlayers().forEach(player -> {
                         if (!player.getUuid().equals(getPlayer().getUuid())
                             && player.getWorldMapTracker() instanceof CustomWorldMapTracker customWorldMapTracker) {
-                            customWorldMapTracker.writeUpdatePacket(toSend);
+                            customWorldMapTracker.writeUpdatePacket(List.copyOf(toSend));
                         }
                     });
                 });
@@ -340,32 +342,34 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     }
 
     public void reset() {
-        reset(false);
+        reset(true);
     }
 
     public void reset(boolean unload) {
         loadedLock.writeLock().lock();
         tickLock.writeLock().lock();
 
-        if (unload) {
-            int imageSize = MathUtil.fastFloor(32.0F * currentResolution.getScale());
-            int fullMapChunkSize = 23 + 4 * imageSize * imageSize;
-            int packetSize = 2621427;
-
-            List<MapChunk> toRemove = new ArrayList<>();
-            for (long index : loaded) {
-                toRemove.add(new MapChunk(ChunkUtil.xOfChunkIndex(index), ChunkUtil.zOfChunkIndex(index), null));
-                packetSize -= fullMapChunkSize;
-                if (packetSize < fullMapChunkSize) {
-                    writeUpdatePacket(toRemove);
-                    toRemove.clear();
-                    packetSize = 2621427;
-                }
-            }
-            writeUpdatePacket(toRemove);
-        }
-
         try {
+            if (unload) {
+                int imageSize = MathUtil.fastFloor(32.0F * currentResolution.getScale());
+                int fullMapChunkSize = 23 + 4 * imageSize * imageSize;
+                int packetSize = 2621427;
+
+                MapImage mapImage = new MapImage(imageSize, imageSize, new int[imageSize * imageSize]);
+
+                List<MapChunk> toRemove = new ArrayList<>();
+                for (long index : loaded) {
+                    toRemove.add(new MapChunk(ChunkUtil.xOfChunkIndex(index), ChunkUtil.zOfChunkIndex(index), mapImage));
+                    packetSize -= fullMapChunkSize;
+                    if (packetSize < fullMapChunkSize) {
+                        writeUpdatePacket(toRemove);
+                        toRemove.clear();
+                        packetSize = 2621427;
+                    }
+                }
+                writeUpdatePacket(toRemove);
+            }
+
             explorationData = null;
             loaded.clear();
             loadFromDisk = null;

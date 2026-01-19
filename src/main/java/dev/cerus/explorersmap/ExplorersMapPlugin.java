@@ -53,6 +53,7 @@ public class ExplorersMapPlugin extends JavaPlugin {
     @Override
     protected void setup() {
         instance = this;
+        config.get().validate();
         config.save();
 
         worldMapDiskCache = new WorldMapDiskCache(getDataDirectory().resolve("tiles"));

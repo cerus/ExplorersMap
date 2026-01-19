@@ -3,6 +3,7 @@ package dev.cerus.explorersmap.config;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
+import com.hypixel.hytale.logger.HytaleLogger;
 import dev.cerus.explorersmap.map.Resolution;
 
 public class ExplorersMapConfig {
@@ -42,6 +43,24 @@ public class ExplorersMapConfig {
     private float minZoom = 8;
     private boolean saveInstanceTiles = false;
     private Resolution resolution = Resolution.FAST;
+
+    public void validate() {
+        if (explorationRadius <= 0) {
+            explorationRadius = 1;
+        }
+        if (diskLoadRate <= 0) {
+            diskLoadRate = 1;
+        }
+        if (generationRate <= 0) {
+            generationRate = 1;
+        }
+        if (minZoom <= 2) {
+            minZoom = 2;
+        }
+        if (resolution == null) {
+            resolution = Resolution.FAST;
+        }
+    }
 
     public void setExplorationRadius(int explorationRadius) {
         this.explorationRadius = explorationRadius;
@@ -118,6 +137,10 @@ public class ExplorersMapConfig {
     }
 
     public void setResolution(Resolution resolution) {
+        if (resolution == null) {
+            HytaleLogger.forEnclosingClass().atWarning().log("Trying to set resolution to null", new Throwable());
+            return;
+        }
         this.resolution = resolution;
     }
 }

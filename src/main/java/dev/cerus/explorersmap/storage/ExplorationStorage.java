@@ -6,11 +6,12 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ExplorationStorage {
     public static final UUID UUID_GLOBAL = new UUID(0, 0);
 
-    private static final Map<String, WorldData> worldDataMap = new HashMap<>();
+    private static final Map<String, WorldData> worldDataMap = new ConcurrentHashMap<>();
 
     public static ExplorationData getOrLoad(String world, UUID uuid) {
         WorldData worldData = worldDataMap.computeIfAbsent(world, o -> new WorldData(world));
