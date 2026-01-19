@@ -42,9 +42,29 @@ public class ExplorationStorage {
         }
     }
 
+    public static void save(String world, UUID uuid) {
+        WorldData worldData = worldDataMap.get(world);
+        if (worldData != null) {
+            worldData.save(uuid);
+        }
+    }
+
     public static void unloadFromAll(UUID uuid) {
         for (String s : worldDataMap.keySet()) {
             unload(s, uuid);
+        }
+    }
+
+    public static void saveAll(UUID uuid) {
+        for (String s : worldDataMap.keySet()) {
+            save(s, uuid);
+        }
+    }
+
+    public static void saveAll(String worldName) {
+        WorldData worldData = worldDataMap.get(worldName);
+        if (worldData != null) {
+            worldData.saveAll();
         }
     }
 
@@ -76,6 +96,19 @@ public class ExplorationStorage {
             Config<ExplorationData> config = playerData.remove(uuid);
             if (config != null) {
                 config.save();
+            }
+        }
+
+        public void save(UUID uuid) {
+            Config<ExplorationData> config = playerData.get(uuid);
+            if (config != null) {
+                config.save();
+            }
+        }
+
+        public void saveAll() {
+            for (UUID uuid : playerData.keySet()) {
+                save(uuid);
             }
         }
 
