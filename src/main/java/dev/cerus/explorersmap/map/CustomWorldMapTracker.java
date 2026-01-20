@@ -12,6 +12,7 @@ import com.hypixel.hytale.protocol.packets.worldmap.MapChunk;
 import com.hypixel.hytale.protocol.packets.worldmap.MapImage;
 import com.hypixel.hytale.protocol.packets.worldmap.UpdateWorldMap;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
@@ -27,7 +28,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -72,9 +72,10 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     private final HLongSet pendingReloadChunks = new HLongOpenHashSet();
 
     // FIXED: Atomic reference to store position data pushed from the World Thread
-    private final AtomicReference<Vector3d> safePosition = new AtomicReference<>(new Vector3d(0, 0, 0));
+    private final AtomicReference<TransformComponent> transformRef = new AtomicReference<>(null);
 
     private boolean started;
+    private boolean transformInitialized;
     private List<ExploredRegion> loadFromDisk;
     private ExplorationData explorationData;
     private Resolution currentResolution;
@@ -83,13 +84,6 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         super(player);
         this.config = ExplorersMapPlugin.getInstance().getConfig().get();
         this.currentResolution = config.getResolution();
-    }
-
-    /**
-     * Called by MapSyncSystem on the World Thread to safely bridge the data.
-     */
-    public void pushSafePosition(Vector3d position) {
-        this.safePosition.set(position);
     }
 
     public void tick(float dt) {
@@ -114,8 +108,22 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
         // FIXED: Instead of calling getTransformComponent() which triggers the Async warning,
         // we use the position pushed into our safe AtomicReference.
-        Vector3d position = this.safePosition.get();
+        TransformComponent transformComponent = this.transformRef.get();
+        if (transformComponent == null) {
+            // No position yet
+            return;
+        }
 
+        if (!transformInitialized) {
+            try {
+                TRANSFORM_COMPONENT_FIELD.set(this, transformComponent);
+            } catch (IllegalAccessException e) {
+                LOGGER.atSevere().log("Failed to set transformComponent", e);
+            }
+            transformInitialized = true;
+        }
+
+        Vector3d position = transformComponent.getPosition();
         int playerX = MathUtil.floor(position.getX());
         int playerZ = MathUtil.floor(position.getZ());
         int playerChunkX = playerX >> 5;
@@ -172,13 +180,13 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             }
 
             if (!config.isPerPlayerMap()) {
-
                 // Broadcast to other players
+                List<MapChunk> chunksCopy = List.copyOf(toSend);
                 world.execute(() -> {
                     world.getPlayers().forEach(player -> {
                         if (!player.getUuid().equals(getPlayer().getUuid())
                             && player.getWorldMapTracker() instanceof CustomWorldMapTracker customWorldMapTracker) {
-                            customWorldMapTracker.writeUpdatePacket(List.copyOf(toSend));
+                            customWorldMapTracker.writeUpdatePacket(chunksCopy);
                         }
                     });
                 });
@@ -379,6 +387,17 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             loadedLock.writeLock().unlock();
             tickLock.writeLock().unlock();
         }
+    }
+
+    /**
+     * Called by MapSyncSystem on the World Thread to safely bridge the data.
+     */
+    public void pushTransform(TransformComponent component) {
+        this.transformRef.set(component);
+    }
+
+    public boolean hasTransform() {
+        return transformRef.get() != null;
     }
 
     private boolean shouldPersist(World world) {

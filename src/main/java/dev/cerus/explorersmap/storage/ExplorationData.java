@@ -65,7 +65,7 @@ public final class ExplorationData {
     public List<ExploredRegion> copyRegionsForSending(int cx, int cz) {
         List<ExploredRegion> copy = new ArrayList<>();
         regions.forEach(exploredRegion -> copy.add(exploredRegion.copyForSending(cx, cz)));
-        regions.sort(Comparator.comparingDouble(r -> Vector2d.distanceSquared(
+        copy.sort(Comparator.comparingDouble(r -> Vector2d.distanceSquared(
                 cx >> 4, cz >> 4,
                 ChunkUtil.xOfChunkIndex(r.getKey()), ChunkUtil.zOfChunkIndex(r.getKey())
         )));

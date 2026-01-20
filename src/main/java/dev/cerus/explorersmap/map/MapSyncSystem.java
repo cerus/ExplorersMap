@@ -20,11 +20,11 @@ public class MapSyncSystem extends EntityTickingSystem<EntityStore> {
     public void tick(float dt, int index, ArchetypeChunk<EntityStore> chunk, Store<EntityStore> store, CommandBuffer<EntityStore> commandBuffer) {
         Player player = chunk.getComponent(index, Player.getComponentType());
 
-        if (player != null && player.getWorldMapTracker() instanceof CustomWorldMapTracker tracker) {
+        if (player != null && player.getWorldMapTracker() instanceof CustomWorldMapTracker tracker && !tracker.hasTransform()) {
             // Use getTransformComponent() to reach the getPosition() method
             TransformComponent transform = player.getTransformComponent();
             if (transform != null) {
-                tracker.pushSafePosition(transform.getPosition());
+                tracker.pushTransform(transform);
             }
         }
     }
