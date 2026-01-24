@@ -18,7 +18,7 @@ import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapSettings;
-import com.hypixel.hytale.server.core.universe.world.worldmap.markers.PlayerIconMarkerProvider;
+import com.hypixel.hytale.server.core.universe.world.worldmap.markers.providers.PlayerIconMarkerProvider;
 import com.hypixel.hytale.server.core.util.Config;
 import com.hypixel.hytale.unsafe.UnsafeUtil;
 import dev.cerus.explorersmap.command.ExplorersMapCommand;

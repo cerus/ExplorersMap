@@ -8,6 +8,7 @@ import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.math.util.MathUtil;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.protocol.Packet;
+import com.hypixel.hytale.protocol.packets.worldmap.ClearWorldMap;
 import com.hypixel.hytale.protocol.packets.worldmap.MapChunk;
 import com.hypixel.hytale.protocol.packets.worldmap.MapImage;
 import com.hypixel.hytale.protocol.packets.worldmap.UpdateWorldMap;
@@ -17,6 +18,7 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapSettings;
+import com.hypixel.hytale.server.core.universe.world.worldmap.markers.MapMarkerTracker;
 import dev.cerus.explorersmap.ExplorersMapPlugin;
 import dev.cerus.explorersmap.config.ExplorersMapConfig;
 import dev.cerus.explorersmap.storage.ExplorationData;
@@ -25,8 +27,6 @@ import dev.cerus.explorersmap.storage.ExploredRegion;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -46,20 +46,18 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     private static final Pattern INSTANCE_SUFFIX_PATTERN = Pattern.compile("-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
     private static final int UNLOAD_RATE = 100;
 
-    private static Method POI_UPDATE_METHOD;
     private static Field TRANSFORM_COMPONENT_FIELD;
+    private static Field MARKER_TRACKER_FIELD;
 
     static {
         try {
-            POI_UPDATE_METHOD = WorldMapTracker.class.getDeclaredMethod("updatePointsOfInterest", World.class, int.class, int.class, int.class);
-            POI_UPDATE_METHOD.setAccessible(true);
+            MARKER_TRACKER_FIELD = WorldMapTracker.class.getDeclaredField("markerTracker");
+            MARKER_TRACKER_FIELD.setAccessible(true);
 
             TRANSFORM_COMPONENT_FIELD = WorldMapTracker.class.getDeclaredField("transformComponent");
             TRANSFORM_COMPONENT_FIELD.setAccessible(true);
-        } catch (NoSuchMethodException e) {
-            LOGGER.atSevere().log("Failed to find updatePointsOfInterest()", e);
         } catch (NoSuchFieldException e) {
-            LOGGER.atSevere().log("Failed to find transformComponent field", e);
+            LOGGER.atSevere().log("Failed to find required fields", e);
         }
     }
 
@@ -70,6 +68,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     private final CircleSpiralIterator spiralIterator = new CircleSpiralIterator();
     private final HLongSet loaded = new HLongOpenHashSet();
     private final HLongSet pendingReloadChunks = new HLongOpenHashSet();
+    private MapMarkerTracker mapMarkerTracker;
 
     // FIXED: Atomic reference to store position data pushed from the World Thread
     private final AtomicReference<TransformComponent> transformRef = new AtomicReference<>(null);
@@ -84,6 +83,12 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         super(player);
         this.config = ExplorersMapPlugin.getInstance().getConfig().get();
         this.currentResolution = config.getResolution();
+
+        try {
+            this.mapMarkerTracker = (MapMarkerTracker) MARKER_TRACKER_FIELD.get(this);
+        } catch (IllegalAccessException e) {
+            LOGGER.atSevere().log("Failed to access mapMarkerTracker", e);
+        }
     }
 
     public void tick(float dt) {
@@ -150,12 +155,8 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             }
         }
 
-        if (world.isCompassUpdating()) {
-            try {
-                POI_UPDATE_METHOD.invoke(this, world, viewRadius, playerChunkX, playerChunkZ);
-            } catch (IllegalAccessException | InvocationTargetException e) {
-                LOGGER.atSevere().log("Failed to invoke updatePointsOfInterest()", e);
-            }
+        if (world.isCompassUpdating() && mapMarkerTracker != null) {
+            mapMarkerTracker.updatePointsOfInterest(dt, world, viewRadius, playerChunkX, playerChunkZ);
         }
 
         if (worldMapManager.isWorldMapEnabled()) {
@@ -359,23 +360,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
         try {
             if (unload) {
-                int imageSize = MathUtil.fastFloor(32.0F * currentResolution.getScale());
-                int fullMapChunkSize = 23 + 4 * imageSize * imageSize;
-                int packetSize = 2621427;
-
-                MapImage mapImage = new MapImage(imageSize, imageSize, new int[imageSize * imageSize]);
-
-                List<MapChunk> toRemove = new ArrayList<>();
-                for (long index : loaded) {
-                    toRemove.add(new MapChunk(ChunkUtil.xOfChunkIndex(index), ChunkUtil.zOfChunkIndex(index), mapImage));
-                    packetSize -= fullMapChunkSize;
-                    if (packetSize < fullMapChunkSize) {
-                        writeUpdatePacket(toRemove);
-                        toRemove.clear();
-                        packetSize = 2621427;
-                    }
-                }
-                writeUpdatePacket(toRemove);
+                getPlayer().getPlayerConnection().write(new ClearWorldMap());
             }
 
             explorationData = null;

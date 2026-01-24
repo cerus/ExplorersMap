@@ -3,14 +3,12 @@ package dev.cerus.explorersmap.map;
 import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.protocol.packets.worldmap.MapMarker;
-import com.hypixel.hytale.server.core.asset.type.gameplay.GameplayConfig;
 import com.hypixel.hytale.server.core.asset.type.gameplay.WorldMapConfig;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
-import com.hypixel.hytale.server.core.universe.world.worldmap.markers.PlayerIconMarkerProvider;
+import com.hypixel.hytale.server.core.universe.world.worldmap.markers.MapMarkerTracker;
 import com.hypixel.hytale.server.core.util.PositionUtil;
 import dev.cerus.explorersmap.ExplorersMapPlugin;
 import java.util.function.Predicate;
@@ -28,17 +26,14 @@ public class CustomPlayerIconMarkerProvider implements WorldMapManager.MarkerPro
     }
 
     @Override
-    public void update(@Nonnull World world, @Nonnull GameplayConfig gameplayConfig, @Nonnull WorldMapTracker tracker, int chunkViewRadius, int playerChunkX, int playerChunkZ) {
+    public void update(@Nonnull World world, @Nonnull MapMarkerTracker tracker, int chunkViewRadius, int playerChunkX, int playerChunkZ) {
         if (!ExplorersMapPlugin.getInstance().getConfig().get().isUnlimitedPlayerTracking()) {
-            original.update(world, gameplayConfig, tracker, chunkViewRadius, playerChunkX, playerChunkZ);
+            original.update(world, tracker, chunkViewRadius, playerChunkX, playerChunkZ);
             return;
         }
 
-        WorldMapConfig worldMapConfig = gameplayConfig.getWorldMapConfig();
+        WorldMapConfig worldMapConfig = world.getGameplayConfig().getWorldMapConfig();
         if (!worldMapConfig.isDisplayPlayers()) {
-            return;
-        }
-        if (!tracker.shouldUpdatePlayerMarkers()) {
             return;
         }
 
@@ -56,7 +51,7 @@ public class CustomPlayerIconMarkerProvider implements WorldMapManager.MarkerPro
             Transform otherPlayerTransform = otherPlayer.getTransform();
             Vector3d otherPos = otherPlayerTransform.getPosition();
 
-            if (tracker instanceof CustomWorldMapTracker customTracker) {
+            if (player.getWorldMapTracker() instanceof CustomWorldMapTracker customTracker) {
                 int otherChunkX = (int)otherPos.x >> 5;
                 int otherChunkZ = (int)otherPos.z >> 5;
                 if (!customTracker.isLoaded(otherChunkX, otherChunkZ)) {
