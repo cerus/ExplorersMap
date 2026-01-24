@@ -2,6 +2,8 @@ package dev.cerus.explorersmap.map;
 
 import com.hypixel.hytale.common.fastutil.HLongOpenHashSet;
 import com.hypixel.hytale.common.fastutil.HLongSet;
+import com.hypixel.hytale.common.plugin.AuthorInfo;
+import com.hypixel.hytale.common.plugin.PluginManifest;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.iterator.CircleSpiralIterator;
 import com.hypixel.hytale.math.util.ChunkUtil;
@@ -14,6 +16,8 @@ import com.hypixel.hytale.protocol.packets.worldmap.MapImage;
 import com.hypixel.hytale.protocol.packets.worldmap.UpdateWorldMap;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
+import com.hypixel.hytale.server.core.plugin.JavaPlugin;
+import com.hypixel.hytale.server.core.plugin.PluginClassLoader;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
@@ -30,11 +34,14 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 
 /**
@@ -48,6 +55,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
     private static Field TRANSFORM_COMPONENT_FIELD;
     private static Field MARKER_TRACKER_FIELD;
+    private static Field PLUGIN_FIELD;
 
     static {
         try {
@@ -56,6 +64,9 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
             TRANSFORM_COMPONENT_FIELD = WorldMapTracker.class.getDeclaredField("transformComponent");
             TRANSFORM_COMPONENT_FIELD.setAccessible(true);
+
+            PLUGIN_FIELD = PluginClassLoader.class.getDeclaredField("plugin");
+            PLUGIN_FIELD.setAccessible(true);
         } catch (NoSuchFieldException e) {
             LOGGER.atSevere().log("Failed to find required fields", e);
         }
@@ -156,11 +167,43 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         }
 
         if (world.isCompassUpdating() && mapMarkerTracker != null) {
-            mapMarkerTracker.updatePointsOfInterest(dt, world, viewRadius, playerChunkX, playerChunkZ);
+            updatePointsOfInterest(worldMapManager, dt, world, viewRadius, playerChunkX, playerChunkZ);
         }
 
         if (worldMapManager.isWorldMapEnabled()) {
             tickWorldMap(world, worldMapSettings, playerChunkX, playerChunkZ, config.getGenerationRate());
+        }
+    }
+
+    private void updatePointsOfInterest(WorldMapManager worldMapManager, float dt, World world, int viewRadius, int playerChunkX, int playerChunkZ) {
+        try {
+            mapMarkerTracker.updatePointsOfInterest(dt, world, viewRadius, playerChunkX, playerChunkZ);
+        } catch (Throwable t) {
+            LOGGER.atWarning().log("Failed to update markers! Are you using any marker mods?");
+            t.printStackTrace(System.err);
+
+            // Try to find out which one is causing issues
+            Set<Map.Entry<String, WorldMapManager.MarkerProvider>> providers = Set.copyOf(worldMapManager.getMarkerProviders().entrySet());
+            for (Map.Entry<String, WorldMapManager.MarkerProvider> entry : providers) {
+                WorldMapManager.MarkerProvider provider = entry.getValue();
+                try {
+                    provider.update(world, mapMarkerTracker, viewRadius, playerChunkX, playerChunkZ);
+                } catch (Throwable tt) {
+                    LOGGER.atWarning().log("Identified marker provider '%s' (%s) as erroneous! Removing this provider for now.",
+                            entry.getKey(), provider.getClass().getName());
+                    if (provider.getClass().getClassLoader() instanceof PluginClassLoader pluginClassLoader) {
+                        try {
+                            JavaPlugin cause = (JavaPlugin) PLUGIN_FIELD.get(pluginClassLoader);
+                            PluginManifest manifest = cause.getManifest();
+                            LOGGER.atWarning().log("Identified mod '%s' by %s as the cause. Consider removing this mod until this is fixed.",
+                                    manifest.getName(), manifest.getAuthors().stream().map(AuthorInfo::getName).collect(Collectors.joining(", ")));
+                        } catch (IllegalAccessException ignored) {
+                        }
+                    }
+
+                    worldMapManager.getMarkerProviders().remove(entry.getKey());
+                }
+            }
         }
     }
 
