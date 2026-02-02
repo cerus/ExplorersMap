@@ -93,7 +93,9 @@ public class ExplorersMapPlugin extends JavaPlugin {
         UUID playerUuid = player.getUuid();
 
         CompletableFuture.runAsync(() -> {
+            LOGGER.atInfo().log("DEBUG: load " + sanitizedName + " " + playerUuid);
             ExplorationStorage.load(sanitizedName, playerUuid);
+            LOGGER.atInfo().log("DEBUG: done load " + sanitizedName + " " + playerUuid);
         }).thenRunAsync(() -> {
             WorldMapSettings worldMapSettings = world.getWorldMapManager().getWorldMapSettings();
             UpdateWorldMapSettings settingsPacket = worldMapSettings.getSettingsPacket();
@@ -105,7 +107,11 @@ public class ExplorersMapPlugin extends JavaPlugin {
             }
 
             injectCustomTracker(player);
-        }, world);
+        }, world).whenComplete((unused, throwable) -> {
+            if (throwable != null) {
+                LOGGER.atSevere().withCause(throwable).log("Could not load player");
+            }
+        });
     }
 
     private void injectCustomTracker(Player player) {

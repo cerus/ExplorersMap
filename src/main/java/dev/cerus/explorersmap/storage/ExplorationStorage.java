@@ -1,15 +1,18 @@
 package dev.cerus.explorersmap.storage;
 
-import com.hypixel.hytale.server.core.util.Config;
+import com.hypixel.hytale.logger.HytaleLogger;
 import dev.cerus.explorersmap.ExplorersMapPlugin;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ExplorationStorage {
     public static final UUID UUID_GLOBAL = new UUID(0, 0);
+    private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
 
     private static final Map<String, WorldData> worldDataMap = new ConcurrentHashMap<>();
 
@@ -17,7 +20,12 @@ public class ExplorationStorage {
         WorldData worldData = worldDataMap.computeIfAbsent(world, o -> new WorldData(world));
         ExplorationData explorationData = worldData.get(uuid);
         if (explorationData == null) {
-            worldData.load(uuid);
+            try {
+                worldData.load(uuid);
+            } catch (IOException e) {
+                LOGGER.atSevere().withCause(e).log("Failed to load exploration data for UUID " + uuid);
+                return new ExplorationData();
+            }
             explorationData = worldData.get(uuid);
         }
         return explorationData;
@@ -30,13 +38,21 @@ public class ExplorationStorage {
 
     public static void load(String world, UUID uuid) {
         WorldData worldData = worldDataMap.computeIfAbsent(world, o -> new WorldData(world));
-        worldData.load(uuid);
+        try {
+            worldData.load(uuid);
+        } catch (IOException e) {
+            LOGGER.atSevere().withCause(e).log("Failed to load exploration data for UUID " + uuid);
+        }
     }
 
     public static void unload(String world, UUID uuid) {
         WorldData worldData = worldDataMap.get(world);
         if (worldData != null) {
-            worldData.unload(uuid);
+            try {
+                worldData.unload(uuid);
+            } catch (IOException e) {
+                LOGGER.atSevere().withCause(e).log("Failed to unload exploration data for UUID " + uuid);
+            }
             if (worldData.isEmpty())  {
                 worldDataMap.remove(world);
             }
@@ -46,7 +62,11 @@ public class ExplorationStorage {
     public static void save(String world, UUID uuid) {
         WorldData worldData = worldDataMap.get(world);
         if (worldData != null) {
-            worldData.save(uuid);
+            try {
+                worldData.save(uuid);
+            } catch (IOException e) {
+                LOGGER.atSevere().withCause(e).log("Failed to save exploration data for UUID " + uuid);
+            }
         }
     }
 
@@ -65,12 +85,17 @@ public class ExplorationStorage {
     public static void saveAll(String worldName) {
         WorldData worldData = worldDataMap.get(worldName);
         if (worldData != null) {
-            worldData.saveAll();
+            try {
+                worldData.saveAll();
+            } catch (IOException e) {
+                LOGGER.atSevere().withCause(e).log("Failed to save all loaded exploration data for world " + worldName);
+            }
         }
     }
 
     private static class WorldData {
-        private final Map<UUID, Config<ExplorationData>> playerData = new HashMap<>();
+        private final Map<UUID, ReentrantLock> loading = new HashMap<>();
+        private final Map<UUID, LoadedExplorationData> playerData = new HashMap<>();
         private final String worldName;
 
         private WorldData(String worldName) {
@@ -78,36 +103,46 @@ public class ExplorationStorage {
         }
 
         public ExplorationData get(UUID uuid) {
-            Config<ExplorationData> config = playerData.get(uuid);
-            return config != null ? config.get() : null;
+            LoadedExplorationData loadedExplorationData = playerData.get(uuid);
+            return loadedExplorationData != null ? loadedExplorationData.data() : null;
         }
 
-        public void load(UUID uuid) {
-            if (playerData.containsKey(uuid)) {
-                return;
-            }
+        public void load(UUID uuid) throws IOException {
+            ReentrantLock lock = loading.computeIfAbsent(uuid, o -> new ReentrantLock());
+            lock.lock();
 
-            Path dir = ExplorersMapPlugin.getInstance().getDataDirectory().resolve("discovered").resolve(worldName);
-            Config<ExplorationData> config = new Config<>(dir, uuid.toString(), ExplorationData.CODEC);
-            config.load();
-            playerData.put(uuid, config);
-        }
+            try {
+                if (playerData.containsKey(uuid)) {
+                    return;
+                }
 
-        public void unload(UUID uuid) {
-            Config<ExplorationData> config = playerData.remove(uuid);
-            if (config != null) {
-                config.save();
-            }
-        }
+                Path dir = ExplorersMapPlugin.getInstance().getDataDirectory().resolve("discovered").resolve(worldName);
+                Path path = dir.resolve(uuid.toString() + ".bin");
+                Path legacyPath = dir.resolve(uuid.toString() + ".json");
+                ExplorationDataFile file = new ExplorationDataFile(path);
+                ExplorationData explorationData = file.readAndConvertIfRequired(legacyPath);
 
-        public void save(UUID uuid) {
-            Config<ExplorationData> config = playerData.get(uuid);
-            if (config != null) {
-                config.save();
+                playerData.put(uuid, new LoadedExplorationData(file, explorationData));
+            } finally {
+                lock.unlock();
             }
         }
 
-        public void saveAll() {
+        public void unload(UUID uuid) throws IOException {
+            LoadedExplorationData loadedExplorationData = playerData.remove(uuid);
+            if (loadedExplorationData != null) {
+                loadedExplorationData.file().write(loadedExplorationData.data());
+            }
+        }
+
+        public void save(UUID uuid) throws IOException {
+            LoadedExplorationData loadedExplorationData = playerData.get(uuid);
+            if (loadedExplorationData != null) {
+                loadedExplorationData.file().write(loadedExplorationData.data());
+            }
+        }
+
+        public void saveAll() throws IOException {
             for (UUID uuid : playerData.keySet()) {
                 save(uuid);
             }

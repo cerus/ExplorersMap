@@ -15,13 +15,15 @@ import java.util.List;
 public final class ExplorationData {
 
     public static final BuilderCodec<ExplorationData> CODEC = BuilderCodec.builder(ExplorationData.class, ExplorationData::new)
-            .append(new KeyedCodec<>("World", Codec.STRING), ExplorationData::setWorldName, ExplorationData::getWorldName).add()
             .append(new KeyedCodec<>("Regions", new ArrayCodec<>(ExploredRegion.CODEC, ExploredRegion[]::new)), (comp, explored) -> {
                 comp.setRegions(new ArrayList<>(Arrays.asList(explored)));
             }, comp -> comp.getRegions().toArray(ExploredRegion[]::new)).add()
             .build();
-    private String worldName;
     private List<ExploredRegion> regions;
+
+    public ExplorationData(List<ExploredRegion> regions) {
+        this.regions = regions;
+    }
 
     public ExplorationData() {
         regions = new ArrayList<>();
@@ -33,14 +35,6 @@ public final class ExplorationData {
 
     public List<ExploredRegion> getRegions() {
         return regions;
-    }
-
-    public void setWorldName(String worldName) {
-        this.worldName = worldName;
-    }
-
-    public String getWorldName() {
-        return worldName;
     }
 
     public ExploredRegion getOrCreateRegionForChunk(MapChunk chunk) {
