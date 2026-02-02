@@ -151,6 +151,8 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
         if (this.getViewRadiusOverride() != null) {
             viewRadius = this.getViewRadiusOverride();
+        } else if (ExplorersMapPlugin.getInstance().getConfig().get().isUnlimitedMarkerTracking()) {
+            viewRadius = -1;
         } else {
             viewRadius = worldMapSettings.getViewRadius(getPlayer().getViewRadius());
         }

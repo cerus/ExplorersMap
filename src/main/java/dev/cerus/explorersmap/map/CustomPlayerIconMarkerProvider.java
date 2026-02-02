@@ -59,7 +59,7 @@ public class CustomPlayerIconMarkerProvider implements WorldMapManager.MarkerPro
                 }
             }
 
-            tracker.trySendMarker(999, playerChunkX, playerChunkZ, otherPos, otherPlayer.getHeadRotation().getYaw(), "Player-" + otherPlayer.getUuid(), "Player: " + otherPlayer.getUsername(), otherPlayer, (id, name, op) -> {
+            tracker.trySendMarker(-1, playerChunkX, playerChunkZ, otherPos, otherPlayer.getHeadRotation().getYaw(), "Player-" + otherPlayer.getUuid(), "Player: " + otherPlayer.getUsername(), otherPlayer, (id, name, op) -> {
                 return new MapMarker(id, name, "Player.png", PositionUtil.toTransformPacket(op.getTransform()), null);
             });
         }

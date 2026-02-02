@@ -117,6 +117,14 @@ $Common.@PageOverlay {
           @Text = "Unlimited player tracking";
         }
       }
+      Group #D {
+        LayoutMode: Middle;
+        Anchor: (Top: 10, Width: 200);
+
+        $Common.@CheckBoxWithLabel #UnlimitedMarkerCheck {
+          @Text = "Unlimited marker tracking";
+        }
+      }
 
       $Common.@TextButton #SaveButton {
         Anchor: (Top: 50, Height: 50);

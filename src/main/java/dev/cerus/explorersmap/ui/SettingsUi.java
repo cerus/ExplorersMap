@@ -100,6 +100,12 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
                 """);
         uiCommandBuilder.set("#UnlimitedTrackingCheck #CheckBox.Value", config.isUnlimitedPlayerTracking());
 
+        uiCommandBuilder.set("#UnlimitedMarkerCheck.TooltipText", """
+                When set to true, you will always see all markers on your map. This includes players.
+                Be aware that other mods could influence this behavior.
+                """);
+        uiCommandBuilder.set("#UnlimitedMarkerCheck #CheckBox.Value", config.isUnlimitedMarkerTracking());
+
         uiEventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "#SaveButton", new EventData()
                 .append("@ResDropdown", "#ResDropdown.Value")
                 .append("@ExplorationRadiusInput", "#ExplorationRadiusInput.Value")
@@ -108,7 +114,8 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
                 .append("@MinZoomInput", "#MinZoomInput.Value")
                 .append("@PerPlayerMapCheck", "#PerPlayerMapCheck #CheckBox.Value")
                 .append("@SaveInstTilesCheck", "#SaveInstTilesCheck #CheckBox.Value")
-                .append("@UnlimitedTrackingCheck", "#UnlimitedTrackingCheck #CheckBox.Value"));
+                .append("@UnlimitedTrackingCheck", "#UnlimitedTrackingCheck #CheckBox.Value")
+                .append("@UnlimitedMarkerCheck", "#UnlimitedMarkerCheck #CheckBox.Value"));
     }
 
     @Override
@@ -133,6 +140,7 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
         confObj.setPerPlayerMap(data.isPerPlayerMap());
         confObj.setSaveInstanceTiles(data.isSaveInstanceTiles());
         confObj.setUnlimitedPlayerTracking(data.isUnlimitedPlayerTracking());
+        confObj.setUnlimitedMarkerTracking(data.isUnlimitedMarkerTracking());
         confObj.validate();
         config.save();
 
@@ -173,6 +181,7 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
                 .append(new KeyedCodec<>("@PerPlayerMapCheck", Codec.BOOLEAN), Data::setPerPlayerMap, Data::isPerPlayerMap).add()
                 .append(new KeyedCodec<>("@SaveInstTilesCheck", Codec.BOOLEAN), Data::setSaveInstanceTiles, Data::isSaveInstanceTiles).add()
                 .append(new KeyedCodec<>("@UnlimitedTrackingCheck", Codec.BOOLEAN), Data::setUnlimitedPlayerTracking, Data::isUnlimitedPlayerTracking).add()
+                .append(new KeyedCodec<>("@UnlimitedMarkerCheck", Codec.BOOLEAN), Data::setUnlimitedMarkerTracking, Data::isUnlimitedMarkerTracking).add()
                 .build();
 
         private int explorationRadius;
@@ -182,6 +191,7 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
         private float minZoom;
         private boolean saveInstanceTiles;
         private boolean unlimitedPlayerTracking;
+        private boolean unlimitedMarkerTracking;
         private Resolution resolution;
 
         public void setExplorationRadius(int explorationRadius) {
@@ -238,6 +248,14 @@ public class SettingsUi extends InteractiveCustomUIPage<SettingsUi.Data> {
 
         public boolean isUnlimitedPlayerTracking() {
             return unlimitedPlayerTracking;
+        }
+
+        public void setUnlimitedMarkerTracking(boolean unlimitedMarkerTracking) {
+            this.unlimitedMarkerTracking = unlimitedMarkerTracking;
+        }
+
+        public boolean isUnlimitedMarkerTracking() {
+            return unlimitedMarkerTracking;
         }
 
         public void setResolutionType(String str) {

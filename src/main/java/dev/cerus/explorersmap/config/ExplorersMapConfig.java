@@ -33,6 +33,9 @@ public class ExplorersMapConfig {
             .append(new KeyedCodec<>("UnlimitedPlayerTracking", Codec.BOOLEAN),
                     ExplorersMapConfig::setUnlimitedPlayerTracking,
                     ExplorersMapConfig::isUnlimitedPlayerTracking).add()
+            .append(new KeyedCodec<>("UnlimitedMarkerTracking", Codec.BOOLEAN),
+                    ExplorersMapConfig::setUnlimitedMarkerTracking,
+                    ExplorersMapConfig::isUnlimitedMarkerTracking).add()
             .build();
 
     private int explorationRadius = 3;
@@ -40,6 +43,7 @@ public class ExplorersMapConfig {
     private int diskLoadRate = 16;
     private int generationRate = 20;
     private boolean unlimitedPlayerTracking = true;
+    private boolean unlimitedMarkerTracking = false;
     private float minZoom = 8;
     private boolean saveInstanceTiles = false;
     private Resolution resolution = Resolution.FAST;
@@ -100,6 +104,14 @@ public class ExplorersMapConfig {
 
     public boolean isUnlimitedPlayerTracking() {
         return unlimitedPlayerTracking;
+    }
+
+    public void setUnlimitedMarkerTracking(boolean unlimitedMarkerTracking) {
+        this.unlimitedMarkerTracking = unlimitedMarkerTracking;
+    }
+
+    public boolean isUnlimitedMarkerTracking() {
+        return unlimitedMarkerTracking;
     }
 
     public void setMinZoom(float minZoom) {
