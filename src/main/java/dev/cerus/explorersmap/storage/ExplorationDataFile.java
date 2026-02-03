@@ -83,6 +83,7 @@ public class ExplorationDataFile {
                 .mapToInt(r -> 12 + r.getChunks().size() * 8)
                 .sum() + 8;
 
+        Files.createDirectories(path.getParent());
         try (OutputStream out = Files.newOutputStream(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
             ByteBuffer buffer = ByteBuffer.allocate(bytes);
             buffer.putLong(regions.size());
