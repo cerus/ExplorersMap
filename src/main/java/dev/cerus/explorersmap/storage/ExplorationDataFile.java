@@ -104,14 +104,12 @@ public class ExplorationDataFile {
 
     public ExplorationData convert(Path legacyJsonPath) throws IOException {
         if (!Files.exists(legacyJsonPath)) {
-            LOGGER.atInfo().log("DEBUG: not exist");
             return read();
         }
 
         String jsonString = Files.readString(legacyJsonPath);
         JsonObject root = JsonParser.parseString(jsonString).getAsJsonObject();
         if (!root.has("Regions")) {
-            LOGGER.atInfo().log("DEBUG: no regions");
             return read();
         }
 
@@ -128,11 +126,9 @@ public class ExplorationDataFile {
 
             ExploredRegion region = new ExploredRegion(index, chunks);
             explorationData.getRegions().add(region);
-            LOGGER.atInfo().log("DEBUG: conv r " + index + " chunks " + chunks.size());
         }
 
         write(explorationData);
-        LOGGER.atInfo().log("DEBUG: write");
         return explorationData;
     }
 }

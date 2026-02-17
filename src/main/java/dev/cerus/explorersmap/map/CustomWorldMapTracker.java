@@ -185,11 +185,12 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             t.printStackTrace(System.err);
 
             // Try to find out which one is causing issues
+            CustomMarkersCollector markersCollector = new CustomMarkersCollector(mapMarkerTracker, viewRadius, playerChunkX, playerChunkZ);
             Set<Map.Entry<String, WorldMapManager.MarkerProvider>> providers = Set.copyOf(worldMapManager.getMarkerProviders().entrySet());
             for (Map.Entry<String, WorldMapManager.MarkerProvider> entry : providers) {
                 WorldMapManager.MarkerProvider provider = entry.getValue();
                 try {
-                    provider.update(world, mapMarkerTracker, viewRadius, playerChunkX, playerChunkZ);
+                    provider.update(world, getPlayer(), markersCollector);
                 } catch (Throwable tt) {
                     LOGGER.atWarning().log("Identified marker provider '%s' (%s) as erroneous! Removing this provider for now.",
                             entry.getKey(), provider.getClass().getName());
@@ -387,7 +388,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
     private void writeUpdatePacket(List<MapChunk> list) {
         UpdateWorldMap packet = new UpdateWorldMap(list.toArray(MapChunk[]::new), null, null);
-        getPlayer().getPlayerConnection().write((Packet) packet);
+        getPlayer().getPlayerConnection().write(packet);
     }
 
     @Override

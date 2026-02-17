@@ -6,7 +6,6 @@ import com.hypixel.hytale.component.system.DelayedSystem;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.protocol.packets.worldmap.UpdateWorldMapSettings;
 import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.event.events.ShutdownEvent;
 import com.hypixel.hytale.server.core.event.events.player.AddPlayerToWorldEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
@@ -18,7 +17,6 @@ import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapSettings;
-import com.hypixel.hytale.server.core.universe.world.worldmap.markers.providers.PlayerIconMarkerProvider;
 import com.hypixel.hytale.server.core.util.Config;
 import com.hypixel.hytale.unsafe.UnsafeUtil;
 import dev.cerus.explorersmap.command.ExplorersMapCommand;
@@ -93,9 +91,7 @@ public class ExplorersMapPlugin extends JavaPlugin {
         UUID playerUuid = player.getUuid();
 
         CompletableFuture.runAsync(() -> {
-            LOGGER.atInfo().log("DEBUG: load " + sanitizedName + " " + playerUuid);
             ExplorationStorage.load(sanitizedName, playerUuid);
-            LOGGER.atInfo().log("DEBUG: done load " + sanitizedName + " " + playerUuid);
         }).thenRunAsync(() -> {
             WorldMapSettings worldMapSettings = world.getWorldMapManager().getWorldMapSettings();
             UpdateWorldMapSettings settingsPacket = worldMapSettings.getSettingsPacket();
@@ -150,7 +146,7 @@ public class ExplorersMapPlugin extends JavaPlugin {
         // Registry changes are safe on WorldAddEvent as it is a lifecycle event
         WorldMapManager worldMapManager = world.getWorldMapManager();
         WorldMapManager.MarkerProvider original = worldMapManager.getMarkerProviders()
-                .getOrDefault("playerIcons", PlayerIconMarkerProvider.INSTANCE);
+                .getOrDefault("playerIcons", com.hypixel.hytale.server.core.universe.world.worldmap.markers.providers.OtherPlayersMarkerProvider.INSTANCE);
         worldMapManager.addMarkerProvider("playerIcons", new CustomPlayerIconMarkerProvider(original));
     }
 

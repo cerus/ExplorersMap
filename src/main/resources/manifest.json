@@ -1,7 +1,7 @@
 {
   "Group": "Cerus",
   "Name": "ExplorersMap",
-  "Version": "1.0.12",
+  "Version": "1.0.13",
   "Description": "Only show discovered places on your map like a true explorer!",
   "Authors": [
     {
@@ -12,6 +12,6 @@
   ],
   "Main": "dev.cerus.explorersmap.ExplorersMapPlugin",
   "DisabledByDefault": false,
-  "ServerVersion": "*",
+  "ServerVersion": "2026.02.17-255364b8e",
   "IncludesAssetPack": true
 }

@@ -6,7 +6,7 @@
 
     <groupId>dev.cerus</groupId>
     <artifactId>hytale-explorers-map</artifactId>
-    <version>1.0.12</version>
+    <version>1.0.13</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -19,7 +19,7 @@
             <groupId>com.hytale</groupId>
             <artifactId>Server</artifactId>
             <version>1.0.0</version>
-            <systemPath>/home/max/intellij_workspace/hytale-server/HytaleServer.jar</systemPath>
+            <systemPath>/home/max/intellij_workspace/hytale-server-fixed/HytaleServer.jar</systemPath>
             <scope>system</scope>
         </dependency>
     </dependencies>
