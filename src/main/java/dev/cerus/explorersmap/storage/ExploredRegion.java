@@ -4,13 +4,14 @@ import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.math.util.ChunkUtil;
-import com.hypixel.hytale.math.vector.Vector2d;
 import com.hypixel.hytale.protocol.packets.worldmap.MapChunk;
 import dev.cerus.explorersmap.util.BetterLongArrayCodec;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import org.joml.Vector2d;
 
 public final class ExploredRegion {
 

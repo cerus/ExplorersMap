@@ -103,6 +103,7 @@ public class ExplorersMapPlugin extends JavaPlugin {
             }
 
             injectCustomTracker(player);
+            player.getWorldMapTracker().sendSettings(world);
         }, world).whenComplete((unused, throwable) -> {
             if (throwable != null) {
                 LOGGER.atSevere().withCause(throwable).log("Could not load player");

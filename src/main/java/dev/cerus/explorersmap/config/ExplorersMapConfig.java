@@ -49,9 +49,6 @@ public class ExplorersMapConfig {
     private Resolution resolution = Resolution.FAST;
 
     public void validate() {
-        if (explorationRadius <= 0) {
-            explorationRadius = 1;
-        }
         if (diskLoadRate <= 0) {
             diskLoadRate = 1;
         }

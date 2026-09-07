@@ -20,7 +20,10 @@ public class ExplorersMapCommand extends AbstractPlayerCommand {
 
     @Override
     protected void execute(@Nonnull CommandContext commandContext, @Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref, @Nonnull PlayerRef playerRef, @Nonnull World world) {
-        Player player = commandContext.senderAs(Player.class);
+        Player player = store.getComponent(ref, Player.getComponentType());
+        if (player == null) {
+            return;
+        }
 
         world.execute(() -> {
             player.getPageManager().openCustomPage(ref, store, new SettingsUi(playerRef));

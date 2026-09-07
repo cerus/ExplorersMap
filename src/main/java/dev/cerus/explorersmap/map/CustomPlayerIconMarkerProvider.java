@@ -1,7 +1,6 @@
 package dev.cerus.explorersmap.map;
 
 import com.hypixel.hytale.math.vector.Transform;
-import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.protocol.packets.worldmap.HeightDeltaIconComponent;
 import com.hypixel.hytale.protocol.packets.worldmap.MapMarker;
 import com.hypixel.hytale.protocol.packets.worldmap.PlayerMarkerComponent;
@@ -43,7 +42,6 @@ public class CustomPlayerIconMarkerProvider implements WorldMapManager.MarkerPro
             for (PlayerRef otherPlayer : world.getPlayerRefs()) {
                 if (!otherPlayer.getUuid().equals(player.getUuid())) {
                     Transform otherPlayerTransform = otherPlayer.getTransform();
-                    Vector3d otherPos = otherPlayerTransform.getPosition();
                     if (playerMapFilter == null || !playerMapFilter.test(otherPlayer)) {
                         PlayerMarkerComponent playerMarker = new PlayerMarkerComponent(otherPlayer.getUuid());
                         HeightDeltaIconComponent heightDeltaComponent = new HeightDeltaIconComponent(
@@ -52,7 +50,7 @@ public class CustomPlayerIconMarkerProvider implements WorldMapManager.MarkerPro
                                 playersMapConfig.getIconSwapHeightDelta(),
                                 playersMapConfig.getBelowIcon()
                         );
-                        String markerId = "Player-" + otherPlayer.getUuid();
+                        String markerId = otherPlayer.getUuid().toString();
                         MapMarker marker = new MapMarkerBuilder(markerId, "Player.png", otherPlayerTransform)
                                 .withCustomName(otherPlayer.getUsername())
                                 .withComponent(playerMarker)

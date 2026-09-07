@@ -1,16 +1,16 @@
 package dev.cerus.explorersmap.storage;
 
-import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.codec.codecs.array.ArrayCodec;
 import com.hypixel.hytale.math.util.ChunkUtil;
-import com.hypixel.hytale.math.vector.Vector2d;
 import com.hypixel.hytale.protocol.packets.worldmap.MapChunk;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+
+import org.joml.Vector2d;
 
 public final class ExplorationData {
 

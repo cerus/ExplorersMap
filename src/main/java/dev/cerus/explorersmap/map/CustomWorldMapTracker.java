@@ -8,8 +8,7 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.iterator.CircleSpiralIterator;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.math.util.MathUtil;
-import com.hypixel.hytale.math.vector.Vector3d;
-import com.hypixel.hytale.protocol.Packet;
+import com.hypixel.hytale.protocol.NetworkChannel;
 import com.hypixel.hytale.protocol.packets.worldmap.ClearWorldMap;
 import com.hypixel.hytale.protocol.packets.worldmap.MapChunk;
 import com.hypixel.hytale.protocol.packets.worldmap.MapImage;
@@ -31,6 +30,7 @@ import dev.cerus.explorersmap.storage.ExploredRegion;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -85,7 +85,8 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     private final AtomicReference<TransformComponent> transformRef = new AtomicReference<>(null);
 
     private boolean started;
-    private boolean transformInitialized;
+    private boolean canCheckWorldMapChannel = true;
+    private boolean channelCheckCompatibilityLogged;
     private List<ExploredRegion> loadFromDisk;
     private ExplorationData explorationData;
     private Resolution currentResolution;
@@ -122,6 +123,12 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             return;
         }
 
+        // Guard this check for API compatibility: some server builds removed
+        // PacketHandler#getChannel(NetworkChannel), which would otherwise crash here.
+        if (!isWorldMapChannelWritable()) {
+            return;
+        }
+
         // FIXED: Instead of calling getTransformComponent() which triggers the Async warning,
         // we use the position pushed into our safe AtomicReference.
         TransformComponent transformComponent = this.transformRef.get();
@@ -130,18 +137,19 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             return;
         }
 
-        if (!transformInitialized) {
-            try {
-                TRANSFORM_COMPONENT_FIELD.set(this, transformComponent);
-            } catch (IllegalAccessException e) {
-                LOGGER.atSevere().log("Failed to set transformComponent", e);
-            }
-            transformInitialized = true;
+        try {
+            TRANSFORM_COMPONENT_FIELD.set(this, transformComponent);
+        } catch (IllegalAccessException e) {
+            LOGGER.atSevere().log("Failed to set transformComponent", e);
         }
 
-        Vector3d position = transformComponent.getPosition();
-        int playerX = MathUtil.floor(position.getX());
-        int playerZ = MathUtil.floor(position.getZ());
+        Object position = resolvePosition(transformComponent);
+        if (position == null) {
+            return;
+        }
+
+        int playerX = MathUtil.floor(readVectorCoordinate(position, "X"));
+        int playerZ = MathUtil.floor(readVectorCoordinate(position, "Z"));
         int playerChunkX = playerX >> 5;
         int playerChunkZ = playerZ >> 5;
 
@@ -152,7 +160,7 @@ public class CustomWorldMapTracker extends WorldMapTracker {
         if (this.getViewRadiusOverride() != null) {
             viewRadius = this.getViewRadiusOverride();
         } else if (ExplorersMapPlugin.getInstance().getConfig().get().isUnlimitedMarkerTracking()) {
-            viewRadius = -1;
+            viewRadius = 1000;
         } else {
             viewRadius = worldMapSettings.getViewRadius(getPlayer().getViewRadius());
         }
@@ -174,6 +182,15 @@ public class CustomWorldMapTracker extends WorldMapTracker {
 
         if (worldMapManager.isWorldMapEnabled()) {
             tickWorldMap(world, worldMapSettings, playerChunkX, playerChunkZ, config.getGenerationRate());
+        } else {
+            // FIX: Even when live map generation is disabled, still send previously explored
+            // tiles from disk so the player sees their explored areas.
+            List<MapChunk> toSend = new ArrayList<>();
+            reloadPending(world, worldMapSettings, config.getGenerationRate(), toSend);
+            loadStored(world, worldMapSettings, config.getDiskLoadRate(), toSend);
+            if (!toSend.isEmpty()) {
+                writeUpdatePacket(toSend);
+            }
         }
     }
 
@@ -252,6 +269,10 @@ public class CustomWorldMapTracker extends WorldMapTracker {
     }
 
     private int loadArea(World world, WorldMapSettings worldMapSettings, int playerChunkX, int playerChunkZ, int maxGeneration, List<MapChunk> out) {
+        if (config.getExplorationRadius() <= 0) {
+            return maxGeneration;
+        }
+
         loadedLock.writeLock().lock();
         try {
             this.spiralIterator.init(playerChunkX, playerChunkZ, 0, config.getExplorationRadius());
@@ -275,8 +296,13 @@ public class CustomWorldMapTracker extends WorldMapTracker {
                             });
                         }
 
-                        mapImage = currentResolution.rescale(mapImage);
-                        out.add(new MapChunk(mapChunkX, mapChunkZ, mapImage));
+                        // FIX: Null-check before rescale to avoid NPE; remove from loaded to allow retry
+                        if (mapImage != null) {
+                            mapImage = currentResolution.rescale(mapImage);
+                            out.add(new MapChunk(mapChunkX, mapChunkZ, mapImage));
+                        } else {
+                            loaded.remove(chunkCoordinates);
+                        }
                     }
                 }
             }
@@ -425,10 +451,73 @@ public class CustomWorldMapTracker extends WorldMapTracker {
      */
     public void pushTransform(TransformComponent component) {
         this.transformRef.set(component);
+        try {
+            TRANSFORM_COMPONENT_FIELD.set(this, component);
+        } catch (IllegalAccessException e) {
+            LOGGER.atSevere().log("Failed to set transformComponent", e);
+        }
     }
 
     public boolean hasTransform() {
         return transformRef.get() != null;
+    }
+
+    private Object resolvePosition(TransformComponent transformComponent) {
+        try {
+            Method method = transformComponent.getClass().getMethod("getPosition");
+            return method.invoke(transformComponent);
+        } catch (NoSuchMethodException | NoSuchMethodError ignored) {
+            // Fall through to field lookup.
+        } catch (Throwable throwable) {
+            LOGGER.atWarning().log("Failed to resolve transform position via method", throwable);
+        }
+
+        for (String fieldName : new String[]{"position", "pos"}) {
+            try {
+                Field field = transformComponent.getClass().getDeclaredField(fieldName);
+                field.setAccessible(true);
+                return field.get(transformComponent);
+            } catch (NoSuchFieldException ignored) {
+                // Try the next candidate.
+            } catch (Throwable throwable) {
+                LOGGER.atWarning().log("Failed to resolve transform position via field '%s'", fieldName, throwable);
+            }
+        }
+
+        return null;
+    }
+
+    private double readVectorCoordinate(Object vector, String axis) {
+        for (String methodName : new String[]{"get" + axis, axis.toLowerCase()}) {
+            try {
+                Method method = vector.getClass().getMethod(methodName);
+                Object value = method.invoke(vector);
+                if (value instanceof Number number) {
+                    return number.doubleValue();
+                }
+            } catch (NoSuchMethodException | NoSuchMethodError ignored) {
+                // Try the next candidate.
+            } catch (Throwable throwable) {
+                LOGGER.atWarning().log("Failed to read vector coordinate '%s' via method '%s'", axis, methodName, throwable);
+            }
+        }
+
+        for (String fieldName : new String[]{axis.toLowerCase(), axis.toUpperCase()}) {
+            try {
+                Field field = vector.getClass().getDeclaredField(fieldName);
+                field.setAccessible(true);
+                Object value = field.get(vector);
+                if (value instanceof Number number) {
+                    return number.doubleValue();
+                }
+            } catch (NoSuchFieldException ignored) {
+                // Try the next candidate.
+            } catch (Throwable throwable) {
+                LOGGER.atWarning().log("Failed to read vector coordinate '%s' via field '%s'", axis, fieldName, throwable);
+            }
+        }
+
+        throw new IllegalStateException("Unable to resolve vector coordinate " + axis + " from " + vector.getClass().getName());
     }
 
     private boolean shouldPersist(World world) {
@@ -445,5 +534,32 @@ public class CustomWorldMapTracker extends WorldMapTracker {
             return INSTANCE_SUFFIX_PATTERN.matcher(name).replaceFirst("");
         }
         return name;
+    }
+
+    private boolean isWorldMapChannelWritable() {
+        if (!canCheckWorldMapChannel) {
+            return true;
+        }
+
+        try {
+            Object playerConnection = getPlayer().getPlayerConnection();
+            Method getChannelMethod = playerConnection.getClass().getMethod("getChannel", NetworkChannel.class);
+            Object channel = getChannelMethod.invoke(playerConnection, NetworkChannel.WorldMap);
+            if (channel == null) {
+                return false;
+            }
+            Method isWritableMethod = channel.getClass().getMethod("isWritable");
+            return Boolean.TRUE.equals(isWritableMethod.invoke(channel));
+        } catch (NoSuchMethodException | NoSuchMethodError e) {
+            canCheckWorldMapChannel = false;
+            if (!channelCheckCompatibilityLogged) {
+                channelCheckCompatibilityLogged = true;
+                LOGGER.atInfo().log("WorldMap channel writable check unavailable on this server API; skipping channel pre-check.");
+            }
+            return true;
+        } catch (Throwable throwable) {
+            LOGGER.atWarning().log("Failed to check WorldMap channel writability", throwable);
+            return true;
+        }
     }
 }

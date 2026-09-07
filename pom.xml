@@ -6,7 +6,7 @@
 
     <groupId>dev.cerus</groupId>
     <artifactId>hytale-explorers-map</artifactId>
-    <version>1.0.14</version>
+    <version>1.0.15</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -25,7 +25,7 @@
         <dependency>
             <groupId>com.hypixel.hytale</groupId>
             <artifactId>Server</artifactId>
-            <version>2026.03.26-89796e57b</version>
+            <version>0.5.2</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

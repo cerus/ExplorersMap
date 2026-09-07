@@ -48,13 +48,15 @@ public class CustomMarkersCollector implements MarkersCollector {
     public void add(MapMarker marker) {
         Position position = marker.transform.position;
         if (this.isInViewDistance(position.x, position.z)) {
-            this.tracker.sendMapMarker(marker);
+            // Snapshot marker state to avoid provider-side in-place mutation from masking movement updates.
+            this.tracker.sendMapMarker(new MapMarker(marker));
         }
     }
 
     @Override
     public void addIgnoreViewDistance(MapMarker marker) {
-        this.tracker.sendMapMarker(marker);
+        // Snapshot marker state to avoid provider-side in-place mutation from masking movement updates.
+        this.tracker.sendMapMarker(new MapMarker(marker));
     }
 
     @Nullable
